@@ -1,0 +1,6 @@
+Identifikuj právní otázky (Issues v IRAC).
+
+Formát:
+
+- Issue 1: …
+- Issue 2: …
