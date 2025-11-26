@@ -42,16 +42,31 @@ def _load_prompt(name: str) -> str:
 
 def _ask_step(llm: LLMClient, step: str, user_query: str) -> str:
     """
-    Obecný wrapper pro jednotlivé kroky (domain, facts, issues, ...).
-    Zatím používá jednotný use_case 'legal_analysis'.
+    Wrapper pro jednotlivé kroky (domain_classification, fact_extraction, ...).
+
+    Načte:
+    - správný prompt
+    - temperature a max_tokens z configu (pokud existují)
     """
     prompt = _load_prompt(step)
+
+    temp_cfg = _CONFIG.get("temperature", {}) or {}
+    max_cfg = _CONFIG.get("max_tokens", {}) or {}
+
+    temperature = temp_cfg.get(step)
+    max_tokens = max_cfg.get(step)
+
     messages = [
         LLMMessage(role="system", content=prompt),
         LLMMessage(role="user", content=user_query),
     ]
-    # Do budoucna můžeš podle _CONFIG řídit teplotu / max_tokens na úrovni LLMClient
-    return llm.chat(use_case="legal_analysis", messages=messages).strip()
+
+    return llm.chat(
+        use_case="legal_analysis",
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    ).strip()
 
 
 # -----------------------------
