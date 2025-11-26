@@ -1,11 +1,97 @@
-# Konfigurace core_legal_engine
+# ================================================
+# Core Legal Engine – config v1
+# ================================================
+# Primární účel:
+# - řízení LLM parametrů
+# - výběr modelů
+# - defaultní teploty / max_tokens
+# - registrace právních domén
+# - metadata pro právní analýzu
+# -----------------------------------------------
+
+version: 1.0
+
+# -----------------------------------------------
+# Modely & parametry
+# -----------------------------------------------
+model_defaults:
+  legal_analysis_model: "gpt-4.1"
+  helper_model: "gpt-4.1-mini"
+
+temperature:
+  domain_classification: 0.0     # musí být deterministické
+  fact_extraction: 0.0           # nesmí halucinovat
+  issue_identification: 0.1
+  rules: 0.1
+  analysis: 0.2
+  conclusion: 0.2
+  certainty: 0.0
+
+max_tokens:
+  domain_classification: 200
+  fact_extraction: 350
+  issue_identification: 350
+  rules: 800
+  analysis: 1000
+  conclusion: 500
+  certainty: 150
+
+# -----------------------------------------------
+# Seznam právních domén (možné klasifikace)
+# -----------------------------------------------
 domains:
-  - civil
-  - trestni
-  - rodina
-  - spravni
-  - pracovni
-  - spotrebitelske
-reasoning:
-  allow_reasoned_inference: true
-  label_inferences: true
+  - "občanské právo"
+  - "rodinné právo"
+  - "trestní právo"
+  - "správní právo"
+  - "školské právo"
+  - "pracovní právo"
+  - "notářská agenda"
+  - "zdravotnické právo"
+  - "ochrana spotřebitele"
+
+# -----------------------------------------------
+# IRAC struktura – aktivní moduly
+# -----------------------------------------------
+irac:
+  enabled: true
+  steps:
+    - "domain"
+    - "facts"
+    - "issues"
+    - "rules"
+    - "analysis"
+    - "conclusion"
+    - "certainty"
+
+# -----------------------------------------------
+# Certainty scoring – logika
+# -----------------------------------------------
+certainty_levels:
+  HARD_FACT:
+    score: 3
+    description: "Závěr vyplývá přímo z textu zákona nebo explicitních faktů."
+  REASONED_INFERENCE:
+    score: 2
+    description: "Závěr vyplývá s vysokou pravděpodobností z kombinace faktů a pravidel."
+  SPECULATION:
+    score: 1
+    description: "Nedostatek faktů nebo nejasná právní úprava."
+
+# -----------------------------------------------
+# Risk layer metadata (zatím nepoužité, připravené pro v1.2)
+# -----------------------------------------------
+risk_flags:
+  deadline_sensitive:
+    keywords: ["lhůta", "odvolání", "dovolání", "žaloba", "rozklad", "správní řízení", "přestupek"]
+  criminal_sensitive:
+    keywords: ["trestní", "přestupek", "PČR", "obvinění"]
+  family_sensitive:
+    keywords: ["OSPOD", "péče", "nezletilé dítě", "škola", "učitel", "ředitel"]
+
+# -----------------------------------------------
+# Debug nastavení
+# -----------------------------------------------
+runtime:
+  allow_fallback: true
+  verbose: false
