@@ -1,13 +1,22 @@
 # Konfigurace judikatura_auto_citation_engine
-min_relevance_score: 0.6
-max_results: 5
-sources_priority:
+
+min_relevance_score: 0.6         # minimální relevance, aby se případ dostal do výstupu
+max_results: 5                   # max počet celkových rozhodnutí
+max_per_court_level: 3           # max rozhodnutí z jedné "úrovně" (ns, nss, us, ...)
+
+sources_priority:                # preferované pořadí zdrojů
   - ns
   - nss
   - us
   - eslp
   - sdeu
 
+# Nastavení konfliktů v judikatuře
 conflict_policy:
   enabled: true
-  max_branches: 3
+  require_min_cases: 2           # minimálně 2 případy, aby vůbec dávalo smysl řešit konflikt
+  direction_field: holding_direction
+  max_branches: 3                # max. počet "větví" (např. pro, proti, smíšené)
+
+# Domain-specific overrides (volitelné – zatím prázdné)
+domain_overrides: {}
