@@ -1,0 +1,29 @@
+version: 1.0
+
+levels:
+  LOW:
+    score_min: 0
+    score_max: 2
+  MEDIUM:
+    score_min: 3
+    score_max: 5
+  HIGH:
+    score_min: 6
+    score_max: 999
+
+flags:
+  deadline_sensitive:
+    weight: 3
+    keywords: ["lhůta", "odvolání", "dovolání", "rozklad", "žaloba", "správní řízení", "přestupek", "promlčení"]
+  criminal_sensitive:
+    weight: 3
+    keywords: ["trestní", "přestupek", "obvinění", "zatčení", "pachatel", "trest"]
+  child_sensitive:
+    weight: 3
+    keywords: ["nezletilé", "dítě", "OSPOD", "škola", "učitel", "třída", "žák"]
+  health_sensitive:
+    weight: 2
+    keywords: ["zdravotní", "lékař", "nemocnice", "operace", "diagnóza"]
+  financial_high:
+    weight: 2
+    keywords: ["milion", "milión", "statisíc", "statitisíc", "insolvence", "exekuce", "zástava"]
