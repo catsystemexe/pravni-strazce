@@ -1,23 +1,46 @@
-"""
-Judikatura engine – vyhledávání a vkládání judikatury do výstupu.
+# tests/test_judikatura_engine.py
 
-TODO:
-- definovat rozhraní pro napojení na externí zdroje (manuální / automatické)
-- logika NONE_FOUND / CONFLICT / OK
-- propojení s citation_policy
-"""
-
-from ..shared_types import EngineInput, EngineOutput
+from engines.judikatura.engine import run
+from engines.shared_types import EngineInput
 
 
-def run(engine_input: EngineInput) -> EngineOutput:
-    # TODO: implementace skutečné logiky judikatury
-    return EngineOutput(
-        name="judikatura_engine",
-        payload={
-            "status": "NONE_FOUND",
-            "cases": [],
-            "note": "Judikatura engine skeleton – zde bude práce s judikaturou.",
+def test_judikatura_none_found():
+    out = run(EngineInput(context={"case": {"domain": "civil"}}))
+    assert out.payload["status"] in ("NONE_FOUND", "ERROR")
+
+
+def test_judikatura_conflict_detection():
+    candidates = [
+        {
+            "id": "1",
+            "court_level": "ns",
+            "reference": "21 Cdo 1111/2020",
+            "year": 2020,
+            "legal_issue": "Náhrada škody",
+            "holding_summary": "Přiznání nároku poškozenému.",
+            "holding_direction": "pro_appellant",
+            "relevance_score": 0.9,
+            "source": "NS ČR",
         },
-        notes=["judikatura_engine not fully implemented yet"],
+        {
+            "id": "2",
+            "court_level": "ns",
+            "reference": "21 Cdo 2222/2021",
+            "year": 2021,
+            "legal_issue": "Náhrada škody",
+            "holding_summary": "Zamítnutí nároku poškozeného.",
+            "holding_direction": "pro_defendant",
+            "relevance_score": 0.88,
+            "source": "NS ČR",
+        },
+    ]
+
+    out = run(
+        EngineInput(
+            context={
+                "case": {"domain": "civil"},
+                "debug_candidates": candidates,
+            }
+        )
     )
+    assert out.payload["status"] == "CONFLICT"
