@@ -1,0 +1,3 @@
+mode: "soft_license"
+license_key_format: "XXXX-XXXX-XXXX-XXXX"
+notes: "Skutečné ověřování klíčů bude na tvé serverové straně."

@@ -1,0 +1,11 @@
+# [NÁZEV DOKUMENTU]
+
+[HLAVIČKA / IDENTIFIKACE ÚČASTNÍKŮ]
+
+[TEXT PODÁNÍ / SMLOUVY – strukturovaný, s nadpisy]
+
+[V ZÁVĚRU FORMULACE NÁVRHU / ŽÁDOSTI]
+
+[V MÍSTĚ A DATU]
+
+[PODPIS]

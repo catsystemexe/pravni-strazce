@@ -1,0 +1,12 @@
+# Konfigurace legal_memory_context_engine
+
+store_categories:
+  - fakta_pripadu
+  - subjekty
+  - castky
+  - casova_osa
+
+ignore_categories:
+  - emoce
+  - osobni soudy
+  - irelevantni smalltalk

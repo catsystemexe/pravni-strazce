@@ -1,0 +1,8 @@
+[project]
+name = "e-advokat-core"
+version = "0.1.0"
+description = "Skeleton architektury pro právního AI agenta"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+dev = ["pytest"]

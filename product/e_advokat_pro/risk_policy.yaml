@@ -1,0 +1,7 @@
+risk_mapping:
+  civil: "medium"
+  trestni: "high"
+  rodina: "high"
+  spravni: "medium"
+  pracovni: "medium"
+  spotrebitelske: "low"

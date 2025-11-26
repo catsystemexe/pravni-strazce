@@ -1,0 +1,12 @@
+# Konfigurace modular_output_system
+
+blocks_order:
+  - executive_summary
+  - legal_analysis
+  - case_law
+  - risks
+  - procedure_map
+  - next_steps
+
+templates:
+  default_answer: "answers/legal_answer_with_judikatura.md"

@@ -1,0 +1,8 @@
+features:
+  judikatura_engine: true
+  legal_safety_layer: true
+  pii_guard: true
+  modular_output_system: true
+  procedural_outcome_simulator: true
+  voice_of_court_engine: true
+  document_blueprints_module: true

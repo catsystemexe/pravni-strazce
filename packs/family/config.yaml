@@ -1,0 +1,4 @@
+# Family pack – konfigurace pro rodinné právo (OSPOD, péče o dítě, ...)
+
+domain: "rodina"
+patterns_dir: "packs/family/patterns"

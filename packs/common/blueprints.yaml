@@ -1,0 +1,9 @@
+# Společné bluepriny dokumentů (žaloba, odvolání, stížnost, smlouva, ...)
+
+blueprints:
+  - id: generic_odvolani
+    title: "Obecné odvolání"
+    description: "Základní struktura odvolání proti rozhodnutí."
+  - id: generic_stiznost
+    title: "Obecná stížnost"
+    description: "Základní struktura stížnosti na postup úřadu/orgánu."

@@ -1,0 +1,13 @@
+id: "e_advokat_pro"
+name: "e-advokát PRO"
+version: "0.1.0-skeleton"
+description: "Core produktová konfigurace pro právního AI asistenta."
+
+default_domain: "civil"
+supported_domains:
+  - civil
+  - trestni
+  - rodina
+  - spravni
+  - pracovni
+  - spotrebitelske

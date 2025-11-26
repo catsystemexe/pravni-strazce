@@ -1,0 +1,4 @@
+# Civil pack – konfigurace pro občanské právo
+
+domain: "civil"
+patterns_dir: "packs/civil/patterns"

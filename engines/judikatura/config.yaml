@@ -1,0 +1,13 @@
+# Konfigurace judikatura_auto_citation_engine
+min_relevance_score: 0.6
+max_results: 5
+sources_priority:
+  - ns
+  - nss
+  - us
+  - eslp
+  - sdeu
+
+conflict_policy:
+  enabled: true
+  max_branches: 3

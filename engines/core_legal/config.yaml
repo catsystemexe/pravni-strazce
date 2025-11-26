@@ -1,0 +1,11 @@
+# Konfigurace core_legal_engine
+domains:
+  - civil
+  - trestni
+  - rodina
+  - spravni
+  - pracovni
+  - spotrebitelske
+reasoning:
+  allow_reasoned_inference: true
+  label_inferences: true

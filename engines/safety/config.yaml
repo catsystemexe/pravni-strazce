@@ -1,0 +1,20 @@
+# Konfigurace legal_safety_layer a risk-aware režimů
+
+risk_profiles:
+  low:
+    allow_reasoned_inference: true
+    require_judikatura: false
+  medium:
+    allow_reasoned_inference: true
+    require_judikatura: true
+  high:
+    allow_reasoned_inference: false
+    require_judikatura: true
+
+pii_whitelist:
+  - jmeno
+  - adresa
+  - rodne_cislo
+  - ic
+  - dic
+  - spisova_znacka
