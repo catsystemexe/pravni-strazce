@@ -1,166 +1,139 @@
 """
-Runtime orchestrátor – hlavní pipeline:
+Orchestrátor právního agenta (v1)
 
-1. role_detection
-2. intent_detection
-3. domain & risk routing
-4. spuštění core_legal_engine
-5. judikatura + safety
-6. složení výstupu přes modular_output_system
+Zatím:
+- spustí Core Legal Engine (IRAC, skeleton/LLM)
+- spustí Risk Engine (deadline/trestní/děti/…)
+- složí z toho finální markdown odpověď pro uživatele
 
-Zatím pořád skeleton, ale architekturou už připravené na reálné enginy.
+Později:
+- přidáme judikaturu, procedurální doporučení, napojení na frontend atd.
 """
 
 from __future__ import annotations
 
-from typing import Dict, List
-
-from .context import (
-    CaseContext,
-    EngineResult,
-    UserRole,
-    LegalDomain,
-    RiskLevel,
-    UserIntent,
-)
-from .config_loader import load_yaml
+from typing import Any, Dict, List
 
 from engines.shared_types import EngineInput
-from engines.core_legal import engine as core_legal_engine
-from engines.judikatura import engine as judikatura_engine
-from engines.safety import legal_safety_layer, pii_guard
-from engines.output import modular_output
+from engines.core_legal.engine import run as run_core_legal
+from engines.risk.engine import run as run_risk
 
 
-# --- Konfigurace produktu (e-advokat PRO) ---
-
-
-_PRODUCT_CONFIG = load_yaml("product/e_advokat_pro/product.yaml")
-_FEATURE_FLAGS = load_yaml("product/e_advokat_pro/feature_flags.yaml")
-_RISK_POLICY = load_yaml("product/e_advokat_pro/risk_policy.yaml")
-
-
-# --- Jednoduché heuristiky (zatím bez LLM) ---
-
-
-def _detect_role(user_query: str) -> UserRole:
-    # TODO: později můžeš nahradit LLM / patterny
-    if "jsem advokát" in user_query.lower():
-        return UserRole.ADVOKAT
-    return UserRole.CLIENT
-
-
-def _detect_intent(user_query: str) -> UserIntent:
-    q = user_query.lower()
-    if "sepsat" in q or "napiš" in q or "podání" in q:
-        return UserIntent.DOCUMENT_DRAFTING
-    if "jak mám postupovat" in q or "co mám dělat" in q:
-        return UserIntent.PROCEDURAL_STRATEGY
-    if "smlouva" in q or "kontrakt" in q:
-        return UserIntent.CONTRACT_REVIEW
-    if "judikatura" in q or "rozhodnutí soudu" in q:
-        return UserIntent.CASE_LAW_LOOKUP
-    if "doporuč, jak napsat" in q or "jak to říct" in q:
-        return UserIntent.STRATEGY_COACH
-    # default
-    return UserIntent.LEGAL_EXPLANATION
-
-
-def _detect_domain(user_query: str) -> LegalDomain:
-    q = user_query.lower()
-    if "rozvod" in q or "péče o dítě" in q or "ospod" in q:
-        return LegalDomain.RODINA
-    if "trestní" in q or "trestný čin" in q or "obžaloba" in q:
-        return LegalDomain.TRESTNI
-    if "pracovní smlouva" in q or "výpověď z práce" in q:
-        return LegalDomain.PRACOVNI
-    if "reklamace" in q or "spotřebitel" in q:
-        return LegalDomain.SPOTREBITELSKE
-    # default na civil
-    return LegalDomain.CIVIL
-
-
-def _map_domain_to_risk(domain: LegalDomain) -> RiskLevel:
-    mapping = _RISK_POLICY.get("risk_mapping", {})
-    level_str = mapping.get(domain.value, "medium")
-    try:
-        return RiskLevel(level_str)
-    except ValueError:
-        return RiskLevel.MEDIUM
-
-
-# --- Hlavní pipeline ---
-
-
-def run_pipeline(user_query: str) -> Dict:
+def _safe_get_first(list_value: Any, key: str) -> str:
     """
-    Entry point pro core agenta.
+    Pomocná funkce: vezme první prvek seznamu slovníků a vrátí hodnotu pod `key`.
+    Pokud cokoliv chybí, vrátí rozumný skeleton text.
     """
-    # 1) Naplnit kontext základními odhady
-    ctx = CaseContext(
-        user_query=user_query,
-        role=_detect_role(user_query),
-        intent=_detect_intent(user_query),
-        domain=_detect_domain(user_query),
-    )
-    ctx.risk_level = _map_domain_to_risk(ctx.domain)
+    if not isinstance(list_value, list) or not list_value:
+        return "(zatím prázdné – skeleton verze)"
+    item = list_value[0]
+    if not isinstance(item, dict):
+        return "(zatím prázdné – skeleton verze)"
+    return str(item.get(key, "(zatím prázdné – skeleton verze)"))
 
-    engine_results: List[EngineResult] = []
 
-    # 2) Core legal engine
-    core_input = EngineInput(context={"case": ctx.to_dict()})
-    core_out = core_legal_engine.run(core_input)
-    engine_results.append(
-        EngineResult(name=core_out.name, data=core_out.payload, notes=core_out.notes)
-    )
+def _render_risk_section(risk_payload: Dict[str, Any]) -> str:
+    level = risk_payload.get("level", "LOW")
+    score = risk_payload.get("score", 0)
+    flags: List[Dict[str, Any]] = risk_payload.get("flags", []) or []
 
-    # 3) Judikatura (pokud zapnutá)
-    if _FEATURE_FLAGS["features"].get("judikatura_engine", True):
-        judik_input = EngineInput(
-            context={"case": ctx.to_dict(), "core_legal": core_out.payload}
-        )
-        judik_out = judikatura_engine.run(judik_input)
-        engine_results.append(
-            EngineResult(name=judik_out.name, data=judik_out.payload, notes=judik_out.notes)
-        )
+    lines: List[str] = []
+    lines.append(f"- Úroveň rizika: **{level}** (score: {score})")
 
-    # 4) Safety – PII + legal safety layer
-    if _FEATURE_FLAGS["features"].get("pii_guard", True):
-        pii_input = EngineInput(
-            context={
-                "case": ctx.to_dict(),
-                "engine_results": [r.to_dict() for r in engine_results],
-            }
-        )
-        pii_out = pii_guard.run(pii_input)
-        engine_results.append(
-            EngineResult(name=pii_out.name, data=pii_out.payload, notes=pii_out.notes)
-        )
+    if not flags:
+        lines.append("- Nebyla detekována žádná specifická riziková oblast.")
+        return "\n".join(lines)
 
-    if _FEATURE_FLAGS["features"].get("legal_safety_layer", True):
-        safety_input = EngineInput(
-            context={
-                "case": ctx.to_dict(),
-                "engine_results": [r.to_dict() for r in engine_results],
-            }
-        )
-        safety_out = legal_safety_layer.run(safety_input)
-        engine_results.append(
-            EngineResult(name=safety_out.name, data=safety_out.payload, notes=safety_out.notes)
-        )
+    lines.append("- Detekované rizikové oblasti:")
 
-    # 5) Modular output – složit finální odpověď
-    output_input = EngineInput(
-        context={
-            "case": ctx.to_dict(),
-            "engine_results": [r.to_dict() for r in engine_results],
-        }
-    )
-    final_out = modular_output.run(output_input)
+    for f in flags:
+        name = f.get("flag", "unknown_flag")
+        weight = f.get("weight", "?")
+        hits = f.get("keywords_hit", []) or []
+        hits_str = ", ".join(str(h) for h in hits)
+        lines.append(f"  - `{name}` (váha {weight}) – klíčová slova: {hits_str}")
+
+    return "\n".join(lines)
+
+
+def run_pipeline(user_query: str) -> Dict[str, Any]:
+    """
+    Hlavní vstupní bod pro backend / API.
+
+    Vrací slovník:
+    {
+        "final_answer": <markdown string>,
+        "core_legal": <EngineOutput>,
+        "risk": <EngineOutput>,
+    }
+    """
+    engine_input = EngineInput(context={"case": {"user_query": user_query}})
+
+    # 1) Core právní analýza
+    core_legal_out = run_core_legal(engine_input)
+    core_payload = core_legal_out.payload or {}
+
+    issues_text = _safe_get_first(core_payload.get("issues"), "text")
+    rules_text = _safe_get_first(core_payload.get("rules"), "text")
+    analysis_text = _safe_get_first(core_payload.get("analysis"), "text")
+    conclusion = core_payload.get("conclusion", {}) or {}
+    conclusion_text = str(conclusion.get("summary", "(zatím bez závěru)"))
+
+    # 2) Risk / safety analýza
+    risk_out = run_risk(engine_input)
+    risk_payload = risk_out.payload or {}
+    risk_section = _render_risk_section(risk_payload)
+
+    # 3) Složení finální odpovědi – skeleton layout pro veřejnost
+    final_answer = f"""# 🧩 Shrnutí
+
+Skeleton verze: shrnutí bude v plné verzi generováno na základě kombinace
+právní analýzy (Core Legal Engine) a risk/safety vrstvy. Teď slouží hlavně
+k ověření architektury a struktury výstupu.
+
+---
+
+## ⚖️ Právní analýza
+
+### Hlavní právní otázka
+{issues_text}
+
+### Relevantní právní úprava
+{rules_text}
+
+### Analýza situace
+{analysis_text}
+
+### Předběžný závěr
+{conclusion_text}
+
+---
+
+## 📚 Judikatura
+
+V této skeleton verzi ještě není implementováno vyhledávání judikatury.
+V budoucnu zde budou přímé odkazy na rozhodnutí soudů, která se týkají
+podobných situací.
+
+---
+
+## ⚠️ Rizika a naléhavost
+
+{risk_section}
+
+---
+
+## 🧭 Doporučený další postup
+
+Skeleton verze: v plné verzi zde budou konkrétní doporučené kroky
+(co může uživatel udělat sám, kdy má zvážit advokáta, jaké lhůty hlídat, atd.).
+Aktuálně je cílem hlavně ověřit, že orchestrátor správně skládá informace
+z Core Legal Engine a Risk Engine do jednoho výstupu.
+
+"""
 
     return {
-        "context": ctx.to_dict(),
-        "engine_results": [r.to_dict() for r in engine_results],
-        "final_answer": final_out.payload.get("rendered_text", ""),
-        "notes": final_out.notes,
+        "final_answer": final_answer,
+        "core_legal": core_legal_out,
+        "risk": risk_out,
     }
