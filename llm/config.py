@@ -1,4 +1,16 @@
 # llm/client.py
+# =============================================================================
+# DEPRECATED / LEGACY MODULE
+#
+# Tento modul (llm/config.py) je považován za **DEPRECATED**.
+# Původně obsahoval alternativního LLMClienta vázaného na llm/config.yaml.
+#
+# Nově je jediným oficiálním LLM klientem:
+#     `llm.client.LLMClient` a `llm.client.LLMMessage`
+#
+# Všechny nové enginy a kód by měly používat `llm.client`.
+# Tento modul je zde pouze z historických důvodů a může být v budoucnu odstraněn.
+# =============================================================================
 
 from __future__ import annotations
 
