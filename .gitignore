@@ -18,9 +18,9 @@ build/
 .vscode/
 .idea/
 
-# Logy a bordel
+# Logy
 *.log
 logs/
 
-# Historie reportů (pokud ji časem zavedeme)
-out/history/
+# (volitelně) historie reportů, pokud ji časem zavedeme
+docs/history/
