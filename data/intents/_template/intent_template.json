@@ -1,0 +1,29 @@
+{
+  "intent_id": "consumer_credit",
+  "label_cs": "Spotřebitelský úvěr",
+  "domain": "consumer_finance_law",
+  "subdomains": [
+    "spotrebitelsky_uver"
+  ],
+  "description_cs": "Základní scénář pro řešení problémů se spotřebitelským úvěrem.",
+  "risk_patterns": [
+    { "pattern": "rpsn", "dimensions": ["financial"] }
+  ],
+  "basic_questions": [
+    "Kdy byla smlouva uzavrena?"
+  ],
+  "safety_questions": [
+    "Bezi ted nejaka kratka lhuta k uhrade nebo vyjadreni?"
+  ],
+  "normative_references": [
+    "obcansky_zakonik",
+    "zakon_o_spotrebitelskem_uveru"
+  ],
+  "conclusion_skeletons": {
+    "low": "Informace jsou nedostatecne, je nutne doplnit smlouvu a casovou osu.",
+    "medium": "Jde pravdepodobne o sporny uver, doporucuji shromazdit dokumenty a zvazit stiznost.",
+    "high": "Jsou zrejme zavazne problemy, doporucuji rychle resit s odbornikem a uplatnit opravne prostredky."
+  },
+  "notes": "Toto je pouze sablona – pred pouzitim uprav podle konkretniho intentu.",
+  "version": "1.0.0"
+}

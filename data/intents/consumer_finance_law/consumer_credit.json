@@ -1,0 +1,45 @@
+{
+  "intent_id": "consumer_credit",
+  "label_cs": "Spotřebitelský úvěr",
+  "domain": "consumer_finance_law",
+  "subdomains": [
+    "spotrebitelsky_uver",
+    "bankovni_sluzby"
+  ],
+  "description_cs": "Problémy se spotřebitelským úvěrem – nevýhodné podmínky, sankce, RPSN, exekuce.",
+  "risk_patterns": [
+    { "pattern": "rpsn", "dimensions": ["financial"] },
+    { "pattern": "skryte.*poplat", "dimensions": ["financial", "procedural"] },
+    { "pattern": "neprimeren.*sankc", "dimensions": ["financial"] },
+    { "pattern": "prodleni", "dimensions": ["financial"] },
+    { "pattern": "exekuc", "dimensions": ["financial", "authority"] },
+    { "pattern": "urok.*z prodleni", "dimensions": ["financial"] }
+  ],
+  "basic_questions": [
+    "Kdy byla smlouva o uveru uzavrena?",
+    "Je poskytovatel bankovni nebo nebankovni subjekt?",
+    "Mas k dispozici smlouvu a vseobecne obchodni podminky?",
+    "Jake vyzvy nebo upominky ti prisly a v jakych datech?",
+    "Co presne veritel aktualne pozaduje (castka, lhuta, hrozby)?",
+    "Doslo k predcasnemu splaceni nebo pokusu o nej?",
+    "Je proti tobe vedeno exekucni rizeni nebo hrozi zahajeni?"
+  ],
+  "safety_questions": [
+    "Bezi ted nejaka kratka lhuta k uhrade nebo vyjadreni?",
+    "Prisla vyzva, kde se hrozi exekuci nebo jinym prisnym dusledkem?",
+    "Jde o subjekt, ktery ma povest rizikove nebankovky?",
+    "Hrozi bezprostredni dopad na majetek (exekuce, blokace uctu)?"
+  ],
+  "normative_references": [
+    "obcansky_zakonik",
+    "zakon_o_spotrebitelskem_uveru",
+    "zakon_o_financnim_arbitrovi"
+  ],
+  "conclusion_skeletons": {
+    "low": "Dostupne informace jsou nedostatecne pro jednoznacny zaver. Je nutne doplnit smlouvu, obchodni podminky a casovou osu vyzev.",
+    "medium": "Na zaklade dostupnych informaci se jevi nektera ujednani jako sporna nebo neprimerena. Doporucuji shromazdit dokumenty, pripravit pisemne namitky a zvazit podani navrhu k financnimu arbitrovi.",
+    "high": "Z dostupnych udaju vypliva vysoka pravdepodobnost poruseni povinnosti poskytovatele uveru. Doporucuji bezodkladne uplatnit obrane prostredky (stiznost, financni arbitr, pripadne soudni ochrana)."
+  },
+  "notes": "Vhodne rozsirit o patterny predatory lending a automatickou detekci exekucnich rizik.",
+  "version": "1.0.0"
+}

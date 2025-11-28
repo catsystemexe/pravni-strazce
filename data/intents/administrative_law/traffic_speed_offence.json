@@ -1,0 +1,44 @@
+{
+  "intent_id": "traffic_speed_offense",
+  "label_cs": "Správní řízení – překročení rychlosti",
+  "domain": "administrative_law",
+  "subdomains": [
+    "spravni_rizeni",
+    "dopravni_prestupky"
+  ],
+  "description_cs": "Překročení rychlosti, měření, správní řízení, pokuta, body, zákaz řízení.",
+  "risk_patterns": [
+    { "pattern": "mereni.*rychlosti", "dimensions": ["procedural", "authority"] },
+    { "pattern": "laser|radar", "dimensions": ["procedural"] },
+    { "pattern": "vyzva.*k podani.*vysvetleni", "dimensions": ["procedural", "authority"] },
+    { "pattern": "spravni.*organ", "dimensions": ["authority"] },
+    { "pattern": "body", "dimensions": ["procedural"] },
+    { "pattern": "zakaz.*rizeni", "dimensions": ["procedural"] }
+  ],
+  "basic_questions": [
+    "Kdy a kde doslo k mereni rychlosti?",
+    "Jakym pristrojem bylo mereni provedeno (typ, pripadne kalibrace)?",
+    "Prisla ti vyzva nebo oznameni o prestupku, a kdy?",
+    "Je znam ridic vozidla, nebo je problem s jeho identifikaci?",
+    "Jake sankce jsou navrhovany (pokuta, body, zakaz rizeni)?",
+    "Bezi nebo uz uplynula lhuta pro vyjadreni/odpor?",
+    "Existuje fotodokumentace nebo jiny zaznam o prestupku?"
+  ],
+  "safety_questions": [
+    "Bezi stale lhuta pro vyjadreni nebo podani odporu/odvolani?",
+    "Hrozi ulozeni zakazu rizeni nebo vysoke bodove zatizeni?",
+    "Jde o opakovany prestupek, ktery muze mit prisnejsi nasledky?"
+  ],
+  "normative_references": [
+    "zakon_o_silnicnim_provozu",
+    "spravni_rad",
+    "zakon_o_odpovednosti_za_prestupky"
+  ],
+  "conclusion_skeletons": {
+    "low": "K dispozici neni dostatek udaju o samotnem mereni ani o prubehu rizeni. Je nutne doplnit dokumenty a casovou osu.",
+    "medium": "Jde pravdepodobne o standardni pripad prestupku. Doporucuji vyzadat si kompletni podklady (protokoly, fotky) a pripravit vecne vyjadreni ke spravnimu organu.",
+    "high": "Z dosavadnich informaci vyplyvaji mozne procesni nebo technicke vady mereni. Doporucuji aktivne napadnout vysledky mereni, podat namitky a navrhnout dokazovani."
+  },
+  "notes": "Důležitý trigger: běžící lhůta k vyjádření nebo odporu jako high-risk.",
+  "version": "1.0.0"
+}
