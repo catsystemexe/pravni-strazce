@@ -124,7 +124,7 @@ class LLMClient:
                 {"role": m.role, "content": m.content} for m in messages
             ]
 
-            resp = self._openai_client.chat.completions.create(  # type: ignore[union-attr]
+            resp = self._openai_client.chat.completions.create(  # type: ignore[arg-type]
                 messages=api_messages,
                 **params,
             )
