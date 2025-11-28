@@ -1,27 +1,26 @@
-# 🔹 VÝSTUPY AGENTA
-out/
-out/*
-
-# 🔹 Python věci
+# Python
 venv/
 .venv/
 __pycache__/
 *.pyc
 
-# 🔹 Editor / OS bordel
+# Editor / OS
 .DS_Store
 *.swp
 *.swo
 
-# 🔹 Node / frontend
+# Node / frontend (do budoucna)
 node_modules/
 dist/
 build/
 
-# 🔹 VSCode / IDE
+# IDE
 .vscode/
 .idea/
 
-# 🔹 Logs
+# Logy a bordel
 *.log
 logs/
+
+# Historie reportů (pokud ji časem zavedeme)
+out/history/
