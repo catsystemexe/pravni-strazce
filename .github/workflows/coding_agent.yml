@@ -1,0 +1,40 @@
+name: Coding agent – Právní strážce
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Úkol pro coding agenta (česky)"
+        required: true
+        default: "Analyzuj strukturu repozitáře Právní strážce a navrhni další kroky."
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run coding agent and save report
+        run: |
+          mkdir -p out
+          python coding_agent.py "${{ inputs.task }}" > out/last_agent_report.md
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-agent-report
+          path: out/last_agent_report.md
