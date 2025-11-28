@@ -1,272 +1,125 @@
 {
-  "catalog_name": "Slovnik Pravniho Strazce – Domenovy katalog",
-  "version": "1.0.0",
+  "$schema": "https://pravni-strazce.local/schema/domains-v1",
   "domains": [
-    {
-      "id": "criminal_law",
-      "label_cs": "Trestní právo",
-      "description_cs": "Trestné činy, přestupky, trestní řízení, obvinění, obžaloba, mladiství.",
-      "subdomains": [
-        "trestne_ciny",
-        "prestupky",
-        "trestni_rizeni",
-        "opravne_prostredky",
-        "poškozeny_a_obvineny",
-        "mladistvi"
-      ],
-      "priority": "high"
-    },
     {
       "id": "civil_law",
       "label_cs": "Občanské právo",
-      "description_cs": "Občanskoprávní spory, náhrada škody, odpovědnost, osobnostní práva, smluvní vztahy.",
-      "subdomains": [
-        "obcanskopravni_spory",
-        "nahrada_skody",
-        "obecna_odpovednost",
-        "osobnostni_prava",
-        "vecna_prava",
-        "smlouvy_obecne"
-      ],
-      "priority": "medium"
+      "description_cs": "Smlouvy, náhrada škody, vlastnictví, sousedské spory, dluhy mezi osobami.",
+      "yaml_rules": "engines/domain_rules/civil.yaml",
+      "aliases": ["civil", "občanské", "občanské právo"],
+      "typical_intents": ["complaint", "document_check", "info"],
+      "packs": ["common", "civil"],
+      "priority": 50
     },
     {
       "id": "family_law",
       "label_cs": "Rodinné právo",
-      "description_cs": "Rozvody, péče o dítě, styk rodiče, výživné, OSPOD, domácí násilí.",
-      "subdomains": [
-        "rozvod",
-        "pece_o_dite",
-        "styk_rodice",
-        "vyzivne",
-        "ospod",
-        "domaci_nasili"
-      ],
-      "priority": "high"
+      "description_cs": "Rozvod, péče o dítě, výživné, styk s dítětem.",
+      "yaml_rules": "engines/domain_rules/rodinne.yaml",
+      "aliases": ["family", "rodinné", "rodinné právo"],
+      "typical_intents": ["complaint", "document_check", "info"],
+      "packs": ["family", "civil"],
+      "priority": 60
     },
     {
       "id": "inheritance_law",
       "label_cs": "Dědické právo",
-      "description_cs": "Dědické řízení, notář – soudní komisař, odvolání, vydědění, závěť, spory mezi dědici.",
-      "subdomains": [
-        "dedicke_rizeni",
-        "notar_soudni_komisar",
-        "odvolani_v_dedictvi",
-        "zavet",
-        "vydedeni",
-        "spor_mezi_dedici"
-      ],
-      "priority": "high"
+      "description_cs": "Dědická řízení, závěti, podíly dědiců, vypořádání pozůstalosti.",
+      "yaml_rules": "engines/domain_rules/notarske.yaml",
+      "aliases": ["inheritance", "dědictví", "pozůstalost"],
+      "typical_intents": ["inheritance", "complaint", "document_check", "info"],
+      "packs": ["civil", "family"],
+      "priority": 70
     },
     {
-      "id": "labor_law",
+      "id": "labour_law",
       "label_cs": "Pracovní právo",
-      "description_cs": "Výpovědi, okamžitá zrušení, mzda, BOZP, diskriminace, vztah zaměstnanec–zaměstnavatel.",
-      "subdomains": [
-        "vypoved",
-        "okamzite_zruseni",
-        "mzda_a_nahrady",
-        "bozp",
-        "diskriminace",
-        "pracovni_podminky"
-      ],
-      "priority": "high"
-    },
-    {
-      "id": "corporate_law",
-      "label_cs": "Obchodní a korporátní právo",
-      "description_cs": "Zakládání firem, společenské smlouvy, převody podílů, VOP, B2B smlouvy, nekalá soutěž.",
-      "subdomains": [
-        "zakladani_spolecnosti",
-        "spolecenske_smlouvy",
-        "prevody_podilu",
-        "vop",
-        "b2b_smlouvy",
-        "nekala_soutez"
-      ],
-      "priority": "medium"
+      "description_cs": "Výpovědi, mzda, pracovní podmínky, pracovní úrazy.",
+      "yaml_rules": "engines/domain_rules/civil.yaml",
+      "aliases": ["labour", "pracovní", "zaměstnání"],
+      "typical_intents": ["labor_termination", "complaint", "document_check"],
+      "packs": ["civil"],
+      "priority": 55
     },
     {
       "id": "administrative_law",
       "label_cs": "Správní právo",
-      "description_cs": "Řízení před úřady, úřední postupy, nečinnost, odvolání, stavební řízení, povinnosti občanů.",
-      "subdomains": [
-        "spravni_rizeni",
-        "uredni_postupy",
-        "spravni_necinnost",
-        "odvolani_spravni",
-        "stavebni_rizeni",
-        "zivotni_okolnosti_obcanu",
-        "dopravni_prestupky"
-      ],
-      "priority": "high"
+      "description_cs": "Rozhodnutí úřadů, odvolání, přestupky mimo dopravu.",
+      "yaml_rules": "engines/domain_rules/spravni.yaml",
+      "aliases": ["správní", "správní právo", "úřad"],
+      "typical_intents": ["appeal_admin_decision", "complaint", "info"],
+      "packs": ["common"],
+      "priority": 50
     },
     {
-      "id": "tax_law",
-      "label_cs": "Daňové právo",
-      "description_cs": "Daňové kontroly, vyměření daní, daňové delikty, odvolání, DPH, DPPO, DPFO.",
-      "subdomains": [
-        "danove_kontroly",
-        "vymereni_dani",
-        "danove_prestupky",
-        "odvolani_v_danich",
-        "dph",
-        "dpfo_dpfo"
-      ],
-      "priority": "medium"
-    },
-    {
-      "id": "consumer_finance_law",
-      "label_cs": "Finanční právo a spotřebitelské úvěry",
-      "description_cs": "Spotřebitelský úvěr, banky, pojišťovny, neoprávněné platby, finanční exekuce.",
-      "subdomains": [
-        "spotrebitelsky_uver",
-        "bankovni_sluzby",
-        "pojisteni",
-        "neopravnene_platby",
-        "financni_exekuce"
-      ],
-      "priority": "high"
-    },
-    {
-      "id": "debt_law",
-      "label_cs": "Exekuční a insolvenční právo",
-      "description_cs": "Exekuce, insolvence, osobní bankrot, oddlužení, vymáhání pohledávek.",
-      "subdomains": [
-        "exekuce",
-        "insolvence",
-        "osobni_bankrot",
-        "oddluzeni",
-        "vymahani_pohledavek"
-      ],
-      "priority": "high"
-    },
-    {
-      "id": "traffic_law",
-      "label_cs": "Dopravní právo",
-      "description_cs": "Přestupky řidičů, alkohol, dechové zkoušky, bodový systém, nehody, policie vs. řidič.",
-      "subdomains": [
-        "dopravni_prestupky",
-        "alkohol_a_drogovy_test",
-        "bodovy_system",
-        "dopravni_nehody",
-        "rizeni_s_policii"
-      ],
-      "priority": "high"
+      "id": "traffic_offences",
+      "label_cs": "Dopravní přestupky",
+      "description_cs": "Rychlost, pásy, telefon, zákaz řízení, body.",
+      "yaml_rules": "engines/domain_rules/spravni.yaml",
+      "aliases": ["doprava", "přestupek za rychlost", "radar", "pokuta za rychlost"],
+      "typical_intents": ["traffic_speed_offence", "complaint", "info"],
+      "packs": ["common"],
+      "priority": 65
     },
     {
       "id": "school_law",
-      "label_cs": "Školské a vzdělávací právo",
-      "description_cs": "Práva žáků a rodičů, kázeňská opatření, vyloučení, OSPOD ve škole, ČŠI.",
-      "subdomains": [
-        "prava_zaku_a_rodicu",
-        "kazenska_opatreni",
-        "vylouceni_ze_studia",
-        "ospod_ve_skole",
-        "csi_kontroly",
-        "specialni_vzdelavaci_potreby"
-      ],
-      "priority": "high"
+      "label_cs": "Školské právo",
+      "description_cs": "Vztah škola–žák–rodič, kázeňské postihy, vyloučení, šikana, OSPOD.",
+      "yaml_rules": "engines/domain_rules/skolske.yaml",
+      "aliases": ["škola", "školské", "školní problém"],
+      "typical_intents": ["school_dispute", "complaint", "info"],
+      "packs": ["school"],
+      "priority": 90
+    },
+    {
+      "id": "criminal_law",
+      "label_cs": "Trestní právo",
+      "description_cs": "Podezření, obvinění, poškozený, náhrada škody v trestním řízení.",
+      "yaml_rules": "engines/domain_rules/trestni.yaml",
+      "aliases": ["trestní", "trestní právo", "trestní řízení"],
+      "typical_intents": ["criminal_defense", "info"],
+      "packs": ["common"],
+      "priority": 70
     },
     {
       "id": "health_law",
       "label_cs": "Zdravotnické právo",
-      "description_cs": "Zdravotní péče, postupy lékařů, očkování, lékařské tajemství, práva pacienta.",
-      "subdomains": [
-        "zdravotni_pece",
-        "postupy_lekaru",
-        "ockovani",
-        "lekarske_tajemstvi",
-        "prava_pacienta"
-      ],
-      "priority": "medium"
+      "description_cs": "Zdravotní péče, souhlasy, pochybení, dokumentace, odmítnutí léčby.",
+      "yaml_rules": "engines/domain_rules/zdravotnicke.yaml",
+      "aliases": ["zdravotnictví", "nemocnice", "lékař"],
+      "typical_intents": ["complaint", "document_check", "info"],
+      "packs": ["common"],
+      "priority": 55
     },
     {
-      "id": "social_law",
-      "label_cs": "Sociální právo",
-      "description_cs": "Sociální dávky, hmotná nouze, příspěvky, průkazy ZTP, část kompetencí OSPOD.",
-      "subdomains": [
-        "socialni_davky",
-        "hmotna_nouze",
-        "prispevky",
-        "prukazy_ztp",
-        "socialni_sluzby"
-      ],
-      "priority": "medium"
+      "id": "consumer_law",
+      "label_cs": "Spotřebitelské právo",
+      "description_cs": "Reklamace, e-shopy, úvěry, pojištění, nekalé praktiky.",
+      "yaml_rules": "engines/domain_rules/spotrebitel.yaml",
+      "aliases": ["spotřebitel", "reklamace", "úvěr", "smlouva o úvěru"],
+      "typical_intents": ["consumer_credit", "complaint", "document_check"],
+      "packs": ["common"],
+      "priority": 60
     },
     {
-      "id": "data_digital_law",
-      "label_cs": "Datové a digitální právo",
-      "description_cs": "GDPR, ochrana dat, online služby, kyberšikana, e-commerce právo.",
-      "subdomains": [
-        "gdpr",
-        "ochrana_osobnich_udaju",
-        "online_sluzby",
-        "kybersikana",
-        "ecommerce_pravo"
-      ],
-      "priority": "medium"
+      "id": "notarial_law",
+      "label_cs": "Notářská agenda",
+      "description_cs": "Notářská řízení, úkony, úschovy, ověřování.",
+      "yaml_rules": "engines/domain_rules/notarske.yaml",
+      "aliases": ["notář", "notářská", "notářské řízení"],
+      "typical_intents": ["inheritance", "document_check", "complaint", "info"],
+      "packs": ["civil"],
+      "priority": 65
     },
     {
-      "id": "media_ip_law",
-      "label_cs": "Mediální a autorské právo",
-      "description_cs": "Autorská práva, ochranné známky, licence, odpovědnost za obsah.",
-      "subdomains": [
-        "autorske_pravo",
-        "ochranne_znamky",
-        "licencni_smlouvy",
-        "odpovednost_za_obsah"
-      ],
-      "priority": "medium"
-    },
-    {
-      "id": "constitutional_law",
-      "label_cs": "Veřejné a ústavní právo",
-      "description_cs": "Stížnosti k ÚS, zásahy státu, základní práva, zákonnost postupu policie.",
-      "subdomains": [
-        "ustavni_stiznosti",
-        "zasahy_statu",
-        "zakladni_prava",
-        "zakonnost_postupu_policie"
-      ],
-      "priority": "medium"
-    },
-    {
-      "id": "international_law",
-      "label_cs": "Mezinárodní a EU právo",
-      "description_cs": "EU právo, mezinárodní smlouvy, mezinárodní ochrana, azyl.",
-      "subdomains": [
-        "eu_pravo",
-        "mezinarodni_smlouvy",
-        "mezinarodni_ochrana",
-        "azyl"
-      ],
-      "priority": "low"
-    },
-    {
-      "id": "property_construction_law",
-      "label_cs": "Nemovitosti a stavební právo",
-      "description_cs": "Vlastnictví, sousedské spory, stavby a povolení, kolaudace.",
-      "subdomains": [
-        "vlastnictvi_nemovitosti",
-        "sousedskespor",
-        "stavebni_povoleni",
-        "kolaudace"
-      ],
-      "priority": "medium"
-    },
-    {
-      "id": "environmental_law",
-      "label_cs": "Právo životního prostředí",
-      "description_cs": "Odpady, vody, ochrana přírody, povolení, sankce.",
-      "subdomains": [
-        "odpady",
-        "vody",
-        "ochrana_prirody",
-        "environmentalni_povoleni",
-        "environmentalni_sankce"
-      ],
-      "priority": "low"
+      "id": "other",
+      "label_cs": "Ostatní / neurčeno",
+      "description_cs": "Dotazy, které nelze bezpečně zařadit, obecná orientace.",
+      "yaml_rules": null,
+      "aliases": ["ostatní", "neurčeno"],
+      "typical_intents": ["info"],
+      "packs": ["common"],
+      "priority": 10
     }
   ]
 }
