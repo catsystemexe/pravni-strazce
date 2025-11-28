@@ -38,313 +38,497 @@
     <pre>================================================================================
 ODPOVĚĎ CODING AGENTA:
 
-## 1. Co vyplývá ze struktury projektu
+## 1. Co chápu ze struktury projektu
 
-- **Celkové pojetí**
-  - Jádro je navrženo jako **pipeline orchestrátor** (`runtime/orchestrator.py`), který skládá výstup z více specializovaných enginů.
-  - Framework je ve stavu **Skeleton v0**, už průchozí, s testy, ale s omezenou doménovou logikou.
+- Projekt je core framework pro „Právní strážce“, rozdělený na:
+  - `runtime/` (orchestrátor, config loader),
+  - `engines/` (core_legal, judikatura, risk, intent, output, memory, safety),
+  - `llm/` (LLM klient + konfigurace + prompts),
+  - `data/` (intents, doménové schéma),
+  - `templates/` (výstupní šablony),
+  - `packs/` (product/packs konfigurace),
+  - API vrstvy (`api/cli.py`, `api/http_server.py`),
+  - nástroje (`tools/validate_data.py`, `tools/apply_policy.py`).
+- LLM integrace je v přechodovém stavu:
+  - `llm/client.py` = jednoduchý klient s env řízeným backendem (`mock` / `openai`), bez čtení `llm/config.yaml`, s voláním OpenAI přes `OPENAI_MODEL` env.
+  - `llm/config.py` = jiný LLM klient, který:
+    - načítá `llm/config.yaml` přes `runtime.config_loader.load_yaml`,
+    - má vlastní `LLMMessage` a `LLMClient`,
+    - vybírá model/temperature/max_tokens podle `use_case` (legal_analysis vs helper),
+    - předpokládá přítomný `OPENAI_API_KEY` a nepodporuje fallback na mock.
+  - `llm/config.yaml` = centrální YAML s modely a parametry.
 
-- **Engines (moduly)**
-  - `engines/core_legal` – hlavní právní analýza (IRAC), má vlastní prompty a config.
-  - `engines/intent` – heuristický intent/domain engine; aktuálně:
-    - tvrdě zakódované klíčové výrazy v kódu,
-    - domény: `civil`, `criminal`, `family`, `administrative`, `school`, `inheritance`,
-    - intenty: `general`, `document_check`, `complaint`, `inheritance`, `school_dispute`, `criminal_defense`, `info`.
-    - zároveň existuje **LLM prompt** pro intent (`prompts/intent_classification.md`), ale engine ho zatím nepoužívá.
-  - `engines/domain_rules` – YAML konfigurace pravidel pro velké právní oblasti:
-    - `civil.yaml`, `trestni.yaml`, `spravni.yaml`, `zdravotnicke.yaml`, `skolske.yaml`, `spotrebitel.yaml`, `notarske.yaml`, `rodinne.yaml`.
-    - To tvoří jakýsi **doménový katalog** pravidel, ale zatím ho zřejmě plně nevyužívá intent engine ani core_legal.
-  - `engines/judikatura` – zatím skeleton s prompty, připravené napojení na zdroj judikatury.
-  - `engines/risk`, `engines/safety`, `engines/output`, `engines/memory` – podpůrné vrstvy (risk scoring, PII guard, styl výstupu, paměť).
-
-- **LLM vrstva**
-  - Existují **dva klienti**:
-    - `llm/client.py` – mock/openai klient s přepínáním přes env, robustní vůči chybějícímu klíči.
-    - `llm/config.py` – druhý klient, který **vyžaduje** `OPENAI_API_KEY` a čte `llm/config.yaml`.
-  - Konfigurace modelů, teplot a max_tokens je v `llm/config.yaml`.
-  - Pro jednotlivé engines jsou připravené prompty (`engines/core_legal/prompts/*`, `engines/judikatura/prompts/*`, `engines/intent/prompts/*`, `prompts/policy/*`).
-
-- **Data a znalostní vrstva**
-  - `data/schema/domains.json` – JSON schema pro definici domén (pravděpodobně pro doménový katalog).
-  - `data/intents/…` – několik JSON souborů s jednotlivými intenty (např. `labor_termination`, `consumer_credit`, `traffic_speed_offence`, `appeal_admin_decision`, `criminal_defense`):
-    - Struktura je zjevně připravena pro **bohatší intent slovníky / scénáře**.
-  - `knowledge/legal_dictionary.md` – výkladový slovník pojmů (zatím 1 soubor).
-
-- **Runtime / produkt**
-  - `runtime/orchestrator.py`, `runtime/context.py`, `runtime/domain_catalog.py`, `runtime/legal_sources.py` – orchestrují tok dat, načítají pravidla, budují CaseContext.
-  - `product/e_advokat_pro/*` – produktová konfigurace (feature flagy, licensing, risk politika).
-  - `packs/*` – tematické balíčky (family, civil, common), pravděpodobně pro modulární zapínání domén.
-
-- **Šablony výstupů**
-  - `templates/answers/legal_answer_with_judikatura.md` – šablona pro odpověď.
-  - `templates/documents/*` – šablony pro generování dokumentů (ultra_clean_export, ultra_legal_document).
-
-- **Nástroje a testy**
-  - `tools/validate_data.py`, `tools/apply_policy.py` – helpery pro validaci dat/configů.
-  - `tests/*` – základní testy pro domain_rules loader, judikatura engine, runtime pipeline a core_legal engine.
+Dnes tedy existují dva paralelní koncepty LLM klienta a dva různé zdroje konfigurace modelu (env vs YAML).
 
 ---
 
-## 2. Co není (zcela) jasné / co chybí k ucelenému obrazu
+## 2. Stručný report a návrh směru
 
-1. **Formát `data/intents/*` JSON**
-   - Chybí ukázka obsahu (v dotazu byl uveden jen název souborů).
-   - Není jasné:
-     - zda jsou to čistě **deskriptivní definice** intentů (název, popis, klíčová slova, sloty),
-     - nebo již obsahují i **prompt templaty / scénáře** (jak má engine reagovat).
-   - Není vidět, jak tyto soubory používá `engines/intent.engine` (aktuálně heuristiky jsou hard‑coded).
+### 2.1 Co jsem našel v `llm/`
 
-2. **Struktura `data/schema/domains.json`**
-   - Nevíme, jak jsou domény popsány (id, label, parent, synonyms?), a jak se má tento soubor vztahovat k:
-     - `engines/domain_rules/*.yaml`,
-     - `runtime/domain_catalog.py`,
-     - a k doménám používaným v core_legal a intent engine.
+1. `llm/client.py`
+   - Definuje:
+     - `Role` = Literal[&quot;system&quot;, &quot;user&quot;, &quot;assistant&quot;].
+     - `LLMMessage` (role, content).
+     - `LLMClient` s:
+       - autodetekcí backendu z `LLM_BACKEND` (`mock` default).
+       - lazy importem `openai.OpenAI`, fallback na mock pokud chybí `OPENAI_API_KEY` nebo import selže.
+       - metodou `chat(use_case, messages, temperature=None, max_tokens=None)`:
+         - pokud backend == &quot;openai&quot; → `_chat_openai(...)`, jinak `_chat_mock(...)`.
+       - `_chat_openai`:
+         - bere model z `OPENAI_MODEL` (default `gpt-4.1-mini`),
+         - volá `client.chat.completions.create`.
+       - `_chat_mock`:
+         - rozlišuje `use_case` aspoň pro:
+           - `&quot;legal_analysis&quot;` → textový mock,
+           - `&quot;jurisprudence_search&quot;` → JSON-like string.
+   - Zatím nepracuje s `llm/config.yaml` a nemá defaultní parametry podle use_case.
 
-3. **Obsah `engines/domain_rules/*.yaml`**
-   - V dotazu jsou uvedeny pouze názvy souborů, ne jejich struktura.
-   - Není jasné:
-     - zda definují jen **tagy a základní pravidla**, nebo i **pod‑domény, typické spory, intenty**,
-     - jak jsou tyto soubory **mapovány do doménového katalogu** a do výběru šablon/analýzy.
+2. `llm/config.py`
+   - Načte `_CONFIG = load_yaml(&quot;llm/config.yaml&quot;)`.
+   - Definuje vlastní `LLMMessage` (role: str, content: str).
+   - `LLMClient.__init__`:
+     - vyžaduje `OPENAI_API_KEY` (jinak `RuntimeError` – žádný fallback).
+     - vytváří `OpenAI(api_key=api_key)`.
+   - `_get_params(use_case)`:
+     - `if use_case == &quot;legal_analysis&quot;` → použije:
+       - `model_defaults.legal_analysis_model`,
+       - `temperature.legal_analysis`,
+       - `max_tokens.legal_analysis`.
+     - jinak → `helper_model` + `helper` temperature + `helper` max_tokens.
+   - `chat(use_case, messages)`:
+     - nepodporuje přepis `temperature`/`max_tokens`,
+     - přímo volá OpenAI a vrací `resp.choices[0].message.content.strip()`.
 
-4. **`runtime/domain_catalog.py`**
-   - Nejsou ukázány detaily, jak runtime staví katalog domén.
-   - Není zřejmé, zda:
-     - používá `data/schema/domains.json`,
-     - nebo `engines/domain_rules/*.yaml`,
-     - nebo obojí (a jak je páruje).
+3. `llm/config.yaml`
+   - Definuje:
+     - `provider: &quot;openai&quot;`,
+     - `model_defaults.legal_analysis_model`, `helper_model`,
+     - `temperature.legal_analysis/helper`,
+     - `max_tokens.legal_analysis/helper`.
 
-5. **Dvojí LLM klient (`llm/client.py` vs. `llm/config.py`)**
-   - Potřebujeme vyjasnit, který je „oficiální“ a který je historický/experimentální.
+4. `llm/prompts/`
+   - V tomto výpisu nebyl konkrétní obsah načten, ale typicky obsahuje prompt šablony pro enginy.
+
+### 2.2 Hlavní problémy
+
+- Dva různé LLM klienty:
+  - rozdílné API (signatura `chat`),
+  - rozdílný mechanismus konfigurace (YAML vs env),
+  - rozdílný přístup k absenci `OPENAI_API_KEY` (fatal vs fallback na mock).
+- YAML konfigurace modelů se nepromítá do „nového“ klienta.
+- Use-case řízení parametrů je jen v `llm/config.py`.
+- Není jasně deklarováno, který klient je „oficiální“.
+
+### 2.3 Směr řešení (v souladu s požadavky)
+
+- „Oficiální“ klient: **`llm/client.py`**.
+- `llm/config.py`:
+  - označit jako **legacy/deprecated**,
+  - postupně odstavit; nové enginy a runtime mají používat `llm.client.LLMClient`.
+- Přenést čtení `llm/config.yaml` a mapování `use_case → (model, temperature, max_tokens)` do **`llm/client.py`**:
+  - přes `runtime.config_loader.load_yaml` (stejný mechanismus jako doteď),
+  - s možností přepsat `temperature`/`max_tokens` argumentem `chat(...)`.
+- Zachovat robustní fallback:
+  - pokud není `OPENAI_API_KEY` nebo import selže → vždy mock backend, žádný runtime crash.
+- Sjednotit enginy:
+  - `core_legal`, `judikatura`, `intent`, `risk`, `output` mají volat výhradně nový `LLMClient.chat(...)`,
+  - žádné přímé sahání do `llm/config.py` nebo vlastní OpenAI klienty.
 
 ---
 
 ## 3. Návrh konkrétních kroků
 
-### 3.1 Architektura LLM vrstvy
+### Krok 1: Zvolit „oficiální“ klient
 
-1. **Rozhodnout o jediném LLM klientovi**
-   - Cíl: odstranit dvojkolejnost (`llm/client.py` vs. `llm/config.py`).
-   - Doporučení:
-     - Zachovat **`llm/client.py`** jako _hlavní_ klient:
-       - umí mock/openai,
-       - je robustní vůči chybějícímu klíči,
-       - používá env proměnné a je lépe zapojen do testů.
-     - `llm/config.py`:
-       - buď přejmenovat na `llm/legacy_client.py` a označit v docu jako deprecated,
-       - nebo jeho logiku (čtení `config.yaml`) přesunout do `llm/client.py` jako konfigurační vrstvu.
-   - Pro vývojáře:
-     - [ ] V dokumentaci (`README` nebo `docs/architecture_llm.md`) jasně popsat:
-       - jak se **přepíná backend** (`LLM_BACKEND=mock|openai`),
-       - jak se **řídí model/teplota/max_tokens** (env vs. `config.yaml`),
-       - jaké **use_case** hodnoty mají jednotlivé enginy používat (např. `legal_analysis`, `intent_classification`, `jurisprudence_search`).
-
-2. **Standardizovat rozhraní pro enginy**
-   - Definovat v `llm/client.py`:
-     - seznam povolených `use_case` (ideálně jako `Literal` nebo Enum),
-     - mapování `use_case -&gt; model/temperature/max_tokens` (převzít z `llm/config.yaml`).
-   - Výstupní API: všechny enginy musí používat **stejnou třídu LLMClient** s metodou `chat(use_case, messages, ...)`.
+1. V dokumentaci (README nebo samostatný `docs/llm.md`) a v kódu:
+   - deklarovat `llm/client.py` jako **jediný oficiální LLM klient**.
+   - `llm/config.py` označit na úrovni komentářů jako deprecated.
 
 ---
 
-### 3.2 Domény a doménový katalog
+### Krok 2: Rozšířit `llm/client.py` o čtení `llm/config.yaml`
 
-3. **Vyjasnit a sepsat „master“ doménový model**
-   - Vytvořit dokument např. `docs/domain_model.md`:
-     - popis hlavních domén (civil, family, criminal, administrative, labour, school, health, consumer, inheritance, etc.),
-     - pro každou:
-       - `id` (strojový),
-       - `label_cs` (uživatelský),
-       - **překlopení na engines/domain_rules** – který YAML odpovídá jaké doméně,
-       - **mapování na intent domény** (např. `administrative -&gt; spravni.yaml`),
-       - případné **subdomény** (např. `family: rozvod, výživné, péče o dítě`).
-   - Tento dokument by měl vzniknout na základě:
-     - `data/schema/domains.json`,
-     - `engines/domain_rules/*.yaml`,
-     - reálných produktových potřeb (`product/e_advokat_pro`).
+Navrhovaný koncept (bez zápisu, jen struktura):
 
-4. **Zjednotit názvy domén napříč vrstvami**
-   - Úkol:
-     - sladit termíny:
-       - YAML soubory: `trestni.yaml`, `civil.yaml`, `spravni.yaml`, `rodinne.yaml`, `skolske.yaml`, `spotrebitel.yaml`, `zdravotnicke.yaml`, `notarske.yaml`,
-       - intent engine: `civil`, `criminal`, `administrative`, `school`, `family`, `inheritance`, `labour`, `other`,
-       - core_legal (pokud používá `domain_classification`).
-   - Konkrétní kroky:
-     - [ ] V `data/schema/domains.json` zavést **canonical id** (např. `criminal_law`), a tam definovat:
-       - `aliasy` (např. „trestní právo“, „trestni“, `criminal`),
-       - vazbu na `engines/domain_rules/trestni.yaml`.
-     - [ ] V `engines/intent/engine.py` nahradit „volné stringy“ za **konstanty** nebo načítání z doménového katalogu (viz níže).
+1. Na začátek `llm/client.py` doplnit import a lazily načtenou konfiguraci:
 
-5. **Napojit `runtime/domain_catalog.py` na `engines/domain_rules` a `data/schema/domains.json`**
-   - Cíl: vytvořit **jedno místo**, kde:
-     - je seznam domén,
-     - je cesta k příslušným YAML pravidlům,
-     - jsou definovány aliasy a meta-informace (typická agenda, podporované intenty, odkazy na znalostní zdroje).
-   - Návrh:
-     - `domain_catalog.py`:
-       - načte `data/schema/domains.json`,
-       - pro každou položku doplní:
-         - `rules_config: engines/domain_rules/&lt;id&gt;.yaml` (pokud existuje),
-         - `packs` (např. `[&quot;civil&quot;, &quot;family&quot;]`),
-         - `supported_intents` (např. `[&quot;complaint&quot;, &quot;document_check&quot;, &quot;info&quot;]`).
+```python
+from runtime.config_loader import load_yaml
+from typing import Dict, Tuple
 
----
+_LLM_CONFIG = load_yaml(&quot;llm/config.yaml&quot;)
 
-### 3.3 Intent engine a intent slovníky
+def _get_default_params(use_case: str) -&gt; Tuple[str, float, int]:
+    &quot;&quot;&quot;
+    Vrátí (model, temperature, max_tokens) pro daný use_case na základě llm/config.yaml.
+    - use_case == &quot;legal_analysis&quot; → legal_analysis_model
+    - jinak → helper_model
+    &quot;&quot;&quot;
+    cfg = _LLM_CONFIG
+    if use_case == &quot;legal_analysis&quot;:
+        model = cfg[&quot;model_defaults&quot;][&quot;legal_analysis_model&quot;]
+        temperature = float(cfg[&quot;temperature&quot;][&quot;legal_analysis&quot;])
+        max_tokens = int(cfg[&quot;max_tokens&quot;][&quot;legal_analysis&quot;])
+    else:
+        model = cfg[&quot;model_defaults&quot;][&quot;helper_model&quot;]
+        temperature = float(cfg[&quot;temperature&quot;][&quot;helper&quot;])
+        max_tokens = int(cfg[&quot;max_tokens&quot;][&quot;helper&quot;])
+    return model, temperature, max_tokens
+```
 
-6. **Oddělit heuristiku od dat – „intent lexicon“**
-   - Současná situace:
-     - `engines/intent/engine.py` má natvrdo zadrátované klíčové výrazy.
-   - Doporučení:
-     - vytvořit v `data/intents/*` **standardní strukturu** pro definice intentů, např.:
+2. Upravovat `LLMClient.chat` tak, aby:
+   - kombinoval YAML defaults s volitelnými parametry:
 
-       ```json
-       {
-         &quot;id&quot;: &quot;traffic_speed_offence&quot;,
-         &quot;domain&quot;: &quot;administrative&quot;,
-         &quot;intent_group&quot;: &quot;complaint&quot;,
-         &quot;labels&quot;: {
-           &quot;cs&quot;: &quot;Přestupek za rychlost&quot;
-         },
-         &quot;keywords&quot;: [&quot;rychlost&quot;, &quot;přestupek&quot;, &quot;radar&quot;, &quot;bloková pokuta&quot;],
-         &quot;negative_keywords&quot;: [&quot;dědictví&quot;],
-         &quot;examples&quot;: [
-           &quot;Dostal jsem pokutu za překročení rychlosti, jak se mohu bránit?&quot;
-         ]
-       }
-       ```
+```python
+    def chat(
+        self,
+        use_case: str,
+        messages: List[LLMMessage],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -&gt; str:
+        # načteme defaulty
+        model, default_temp, default_max_tokens = _get_default_params(use_case)
 
-     - `engines/intent/engine.py` by:
-       - načítal takové JSON soubory přes helper (např. `runtime/domain_catalog` nebo vlastní loader),
-       - **neobsahoval hard‑coded seznam klíčových slov**, ale pracoval s daty.
-   - Kroky:
-     - [ ] Zkontrolovat obsah existujících JSON (`labor_termination.json`, `consumer_credit.json`, atd.) a sjednotit jejich strukturu (pokud se liší).
-     - [ ] Vytvořit `data/intents/README.md` s popisem povinných polí (schema).
+        # umožníme override
+        temp = temperature if temperature is not None else default_temp
+        max_tok = max_tokens if max_tokens is not None else default_max_tokens
 
-7. **Připravit dvouvrstvý Intent Engine**
-   - Cíl: mít **kombinovaný režim**:
-     - LVL 1: **heuristika/dictionary** (levná, rychlá, deterministická),
-     - LVL 2: **LLM dopřesnění** (volitelně podle `confidence` a produktové konfigurace).
-   - Konkrétní návrh:
-     - v `engines/intent/engine.py`:
-       - zachovat rychlou heuristiku (ale založenou na datech z JSON),
-       - pokud `confidence &lt; X` (např. 0.5) a LLM povoleno:
-         - zavolat LLM s promptem `engines/intent/prompts/intent_classification.md`,
-         - nechat si vrátit JSON se strukturou:
-           - `intent`, `domain`, `confidence`, `reasoning`, `keywords`, `questions_for_user`.
-     - pro orchestrátor:
-       - payload intent enginu by mohl mít 2 části:
-         ```json
-         {
-           &quot;heuristic&quot;: {...},
-           &quot;llm&quot;: {...},   // pokud použito
-           &quot;final&quot;: {...}  // vybraný výsledek (podle vyšší confidence / politiky)
-         }
-         ```
-   - Dokumentace:
-     - [ ] V `docs/intent_engine.md` popsat:
-       - jak funguje heuristika,
-       - kdy se spouští LLM,
-       - jaký je output formát.
+        if self.backend == &quot;openai&quot; and self._openai_client is not None:
+            return self._chat_openai(
+                model=model,
+                messages=messages,
+                temperature=temp,
+                max_tokens=max_tok,
+            )
 
-8. **Mapování intentů na šablony a analýzu**
-   - Cíl: podle konkrétního intentu umět:
-     - vybrat vhodnou **šablonu odpovědi** (např. jiný důraz u `document_check` vs. `complaint`),
-     - nastavit **stupnici rizika** nebo doporučený další krok.
-   - Kroky:
-     - [ ] V `templates/answers` zavedou další šablony (např. `legal_answer_complaint.md`, `legal_answer_document_check.md`) nebo v existující šabloně parametry typu:
-       - `{{ intent_type }}`, `{{ domain }}`, `{{ risk_level }}`, `{{ has_judikatura }}`.
-     - [ ] V `runtime/orchestrator.py` podle `intent` a `domain` rozhodnout, jakou šablonu používat:
-       - základní mapování může být v YAML (např. `packs/common/blueprints.yaml` nebo nový `config`).
+        return self._chat_mock(use_case, messages)
+```
+
+3. Upravit `_chat_openai` signaturu:
+
+```python
+    def _chat_openai(
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        temperature: Optional[float],
+        max_tokens: Optional[int],
+    ) -&gt; str:
+        try:
+            api_messages = [{&quot;role&quot;: m.role, &quot;content&quot;: m.content} for m in messages]
+
+            resp = self._openai_client.chat.completions.create(  # type: ignore[union-attr]
+                model=model,
+                messages=api_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            content = getattr(resp.choices[0].message, &quot;content&quot;, None)  # type: ignore[index]
+            return content or &quot;&quot;
+        except Exception as e:
+            return f&quot;[LLM ERROR] {e}&quot;
+```
+
+4. Tím pádem:
+   - `OPENAI_MODEL` env již není potřeba (model určuje YAML).
+   - `use_case` vždy vede k jasnému výběru parametrů.
+
+**Nejasnost k doplnění do reportu:**  
+- V `llm/config.yaml` jsou zatím jen dvě větve (`legal_analysis` vs `helper`). Pokud budou další use_case (např. `judikatura_search`, `intent_classification`, `risk_assessment`), bude potřeba rozšířit YAML a `_get_default_params`. To je produktové rozhodnutí – zatím lze všechny ostatní use-cases mapovat na `helper`.
 
 ---
 
-### 3.4 Doménová pravidla (`engines/domain_rules`)
+### Krok 3: Označit `llm/config.py` jako legacy a deaktivovat přímé použití
 
-9. **Standardizovat strukturu `*.yaml` v domain_rules**
-   - Nejprve je potřeba:
-     - [ ] Projít konkrétní YAML (např. `civil.yaml`) a zjistit, jaká pole obsahují.
-   - Typická cílová struktura:
-     ```yaml
-     id: civil
-     label_cs: Občanské právo
-     description_cs: &gt;
-       Spory mezi soukromými osobami, smlouvy, náhrada škody...
-     keywords:
-       - smlouva
-       - náhrada škody
-     typical_intents:
-       - complaint
-       - document_check
-     subdomains:
-       - id: contracts
-         label_cs: Smlouvy
-         keywords: [&quot;smlouva&quot;, &quot;dohoda&quot;]
-       - id: damages
-         label_cs: Náhrada škody
-         keywords: [&quot;náhrada škody&quot;, &quot;odpovědnost&quot;]
-     ```
-   - Následně:
-     - [ ] Dopsat do `engines/domain_rules/loader.py` validaci struktury a mapping do interního datového typu (např. `DomainRuleConfig` dataclass).
-     - [ ] Napsat testy v `tests/test_domain_rules.py` pro novou strukturu.
+1. Do hlavičky `llm/config.py` přidat výrazný komentář:
 
-10. **Napojení domain_rules na core_legal a intent**
-    - `core_legal` engine může:
-      - podle `domain` načíst příslušná **pravidla / checklisty** (např. pro rodinné právo: vždy se ptát na soudní rozhodnutí, OSPOD, atd.).
-      - Pomocí `rules.md` promptu u core_legal a YAML dat vložit do LLM relevantní stručný výcuc práva (high-level, ne judikaturu).
-    - `intent` engine:
-      - může použít `keywords` a `subdomains` z domain_rules pro přesnější přiřazení domény, zejména u nových typů sporů.
+```python
+&quot;&quot;&quot;
+DEPRECATED: Tento modul byl nahrazen centralizovaným klientem v llm/client.py.
+Nepoužívej ho v novém kódu. Bude odstraněn po migraci všech volání.
+&quot;&quot;&quot;
+```
+
+2. Pro jistotu (aby se omylem nepoužil):
+   - lze ponechat implementaci beze změny (kvůli případným starým importům),
+   - nebo, pokud v repozitáři není nikde importován, označit pro budoucí smazání v TODO.
+
+3. Pro Stage 1:
+   - jen označit jako legacy,
+   - neprovádět „tvrdé“ změny (aby se nepokazila kompatibilita, i když teď reálně zřejmě není používán žádnými enginy).
 
 ---
 
-### 3.5 Dokumentace a vývojářský workflow
+### Krok 4: Zajistit robustitu při chybějícím `OPENAI_API_KEY`
 
-11. **Doplnit high-level dokumentaci**
-    - V adresáři `docs/` navrhuji doplnit:
-      - `docs/architecture_overview.md` – shrnutí modulů, pipeline, jak spolu souvisí:
-        - API vrstva → orchestrátor → engines → templates.
-      - `docs/domains_and_intents.md` – jednotný přehled domén a intentů, vazba na YAML/JSON soubory.
-      - `docs/llm_usage.md` – jak enginy používají LLM, jaký prompt kam patří.
+Toto je již v `llm/client.py` do značné míry hotové – v `__init__`:
 
-12. **Popis datových schémat**
-    - Vytvořit stručné JSON/YAML schemata (minimálně slovně v Markdown):
-      - pro `data/intents/*` (jaký je povinný tvar),
-      - pro `data/schema/domains.json`,
-      - pro `engines/domain_rules/*.yaml`.
-    - To umožní:
-      - psát validátory (`tools/validate_data.py`),
-      - psát testy, které hlídají konzistenci.
+- pokud `OPENAI_API_KEY` chybí nebo import/klient selže → přepne backend na `&quot;mock&quot;`.
 
-13. **Ujasnit produktové konfigurace**
-    - `product/e_advokat_pro`:
-      - v `product.yaml` případně přidat:
-        - seznam **aktivních domén**,
-        - zda je povolen LLM pro:
-          - intent engine,
-          - core_legal,
-          - judikaturu.
-      - `risk_policy.yaml`:
-        - jak se mapují intent/domain na defaultní risk level,
-        - to využije `engines/risk`.
+Doporučené drobné vylepšení:
+
+1. Explicitně logovat / poznámkovat důvod fallbacku (např. přes `print` nebo budoucí logger):
+
+```python
+        if self.backend == &quot;openai&quot;:
+            api_key = os.getenv(&quot;OPENAI_API_KEY&quot;)
+            if not api_key:
+                # Bez klíče nemá smysl se snažit o openai režim
+                # TODO: nahradit loggerem
+                # print(&quot;LLMClient: OPENAI_API_KEY not set, falling back to mock backend.&quot;)
+                self.backend = &quot;mock&quot;
+                return
+            ...
+```
+
+2. V `_chat_openai` chyba se již převádí na text `&quot;[LLM ERROR] ...&quot;` – to je v souladu s požadavkem „raději degradovat než spadnout“.
 
 ---
 
-## 4. Shrnutí prioritizovaných kroků (MVP roadmap)
+### Krok 5: Sjednotit volání LLM v enginech
 
-1. **Vyjasnit LLM klienta a zdokumentovat jeho použití.**
-2. **Zharmonizovat domény:**
-   - projít `data/schema/domains.json`, `engines/domain_rules/*.yaml`, `intent` a sepsat jednotný seznam domén + aliasů.
-3. **Zadat a sjednotit formát `data/intents/*` a začít z něj čerpat v `engines/intent/engine.py` místo hard‑codovaných seznamů.**
-4. **Zavést kombinovaný intent engine (heuristika + LLM), navázaný na existující prompt `intent_classification.md`.**
-5. **Standardizovat strukturu `engines/domain_rules/*.yaml` a napojit je na domain_catalog a core_legal.**
-6. **Rozšířit šablony odpovědí tak, aby uměly pracovat s `intent` a `domain`, a orchestrátor je podle toho volil.**
-7. **Doplnit dokumentaci v `docs/` (architektura, domains &amp; intents, LLM usage, datová schémata).**
+Z poskytnutého výpisu nejsou vidět v enginech žádná přímá volání LLM; nejspíš jsou v souborech, které zatím nemáme načtené (`engines/core_legal/engine.py`, `engines/judikatura/engine.py`, `engines/risk/engine.py`, `engines/output/...`).
 
-Pokud mi doplníš:
-- ukázku jednoho `data/intents/*.json`,
-- obsah jednoho typického `engines/domain_rules/*.yaml`,
-- obsah `data/schema/domains.json`,
+**Co je potřeba udělat (plán pro developera):**
 
-mohu navrhnout přesná schemata (JSONSchema/YAML) a konkrétní refaktoring kódu v `intent` enginu a `domain_catalog`.
+1. V každém LLM-based engine:
+   - najít všechna místa, kde se:
+     - přímo používá `openai` klient,
+     - nebo importuje `llm.config.LLMClient`,
+     - nebo se nějak jinak sahá na `OPENAI_API_KEY` / `OPENAI_MODEL`.
+2. Nahradit za použití `llm.client`:
+
+```python
+from llm.client import LLMClient, LLMMessage
+
+llm = LLMClient()
+
+messages = [
+    LLMMessage(role=&quot;system&quot;, content=&quot;...prompt...&quot;),
+    LLMMessage(role=&quot;user&quot;, content=user_text),
+]
+
+response_text = llm.chat(
+    use_case=&quot;legal_analysis&quot;,  # nebo jiný use_case dle engine
+    messages=messages,
+    # optional override:
+    # temperature=0.3,
+    # max_tokens=1000,
+)
+```
+
+3. Navržené mapování `use_case`:
+   - `engines/core_legal`:
+     - hlavní právní analýza → `use_case=&quot;legal_analysis&quot;`.
+   - `engines/judikatura`:
+     - hledání judikatury → např. `use_case=&quot;jurisprudence_search&quot;` (momentálně v mocku rozlišeno).
+   - `engines/intent`:
+     - pokud někdy bude LLM verze klasifikace → `use_case=&quot;helper&quot;` / `intent_classification`.
+   - `engines/risk`, `engines/output`, `engines/memory`, `engines/safety`:
+     - spíš krátké pomocné úlohy → mapovat na helper → `use_case=&quot;helper&quot;` (dokud nebude detailnější config).
+
+4. Zajistit, aby žádný engine již neimportoval `llm.config`:
+   - pokud něco takového existuje, přepsat import na `llm.client`.
+   - pokud engine bral `model`/`temperature` z jiného YAML (např. `engines/core_legal/config.yaml`), zvážit:
+     - zda to nemá být jen „business“ konfigurace (např. režim skeleton/llm),
+     - LLM parametry nechat jednotně v `llm/config.yaml`.
+
+---
+
+### Krok 6: Návrh konkrétních diffů (konceptuálně)
+
+#### 6.1 `llm/client.py` – rozšíření o YAML konfiguraci
+
+```diff
+@@
+-from dataclasses import dataclass
+-from typing import List, Optional, Literal, Any
++from dataclasses import dataclass
++from typing import List, Optional, Literal, Any, Tuple
++
++from runtime.config_loader import load_yaml
+@@
+ Role = Literal[&quot;system&quot;, &quot;user&quot;, &quot;assistant&quot;]
+@@
+ class LLMMessage:
+     role: Role
+     content: str
++
++
++_LLM_CONFIG = load_yaml(&quot;llm/config.yaml&quot;)
++
++
++def _get_default_params(use_case: str) -&gt; Tuple[str, float, int]:
++    &quot;&quot;&quot;
++    Vrátí (model, temperature, max_tokens) pro daný use_case
++    na základě llm/config.yaml.
++    &quot;&quot;&quot;
++    cfg = _LLM_CONFIG
++    if use_case == &quot;legal_analysis&quot;:
++        model = cfg[&quot;model_defaults&quot;][&quot;legal_analysis_model&quot;]
++        temperature = float(cfg[&quot;temperature&quot;][&quot;legal_analysis&quot;])
++        max_tokens = int(cfg[&quot;max_tokens&quot;][&quot;legal_analysis&quot;])
++    else:
++        model = cfg[&quot;model_defaults&quot;][&quot;helper_model&quot;]
++        temperature = float(cfg[&quot;temperature&quot;][&quot;helper&quot;])
++        max_tokens = int(cfg[&quot;max_tokens&quot;][&quot;helper&quot;])
++    return model, temperature, max_tokens
+@@
+     def chat(
+         self,
+         use_case: str,
+         messages: List[LLMMessage],
+         temperature: Optional[float] = None,
+         max_tokens: Optional[int] = None,
+     ) -&gt; str:
+@@
+-        if self.backend == &quot;openai&quot; and self._openai_client is not None:
+-            return self._chat_openai(messages, temperature, max_tokens)
+-
+-        # fallback / testovací mock
+-        return self._chat_mock(use_case, messages)
++        # načtení defaultních parametrů z llm/config.yaml
++        model, default_temp, default_max_tokens = _get_default_params(use_case)
++
++        temp = temperature if temperature is not None else default_temp
++        max_tok = max_tokens if max_tokens is not None else default_max_tokens
++
++        if self.backend == &quot;openai&quot; and self._openai_client is not None:
++            return self._chat_openai(
++                model=model,
++                messages=messages,
++                temperature=temp,
++                max_tokens=max_tok,
++            )
++
++        # fallback / testovací mock
++        return self._chat_mock(use_case, messages)
+@@
+-    def _chat_openai(
+-        self,
+-        messages: List[LLMMessage],
+-        temperature: Optional[float],
+-        max_tokens: Optional[int],
+-    ) -&gt; str:
++    def _chat_openai(
++        self,
++        model: str,
++        messages: List[LLMMessage],
++        temperature: Optional[float],
++        max_tokens: Optional[int],
++    ) -&gt; str:
+@@
+-            model = os.getenv(&quot;OPENAI_MODEL&quot;, &quot;gpt-4.1-mini&quot;)
+-
+             # převod do dict formátu, kterou openai klient očekává
+             api_messages = [
+                 {&quot;role&quot;: m.role, &quot;content&quot;: m.content} for m in messages
+             ]
+@@
+-                model=model,
++                model=model,
+                 messages=api_messages,
+                 temperature=temperature,
+                 max_tokens=max_tokens,
+             )
+```
+
+#### 6.2 `llm/config.py` – označení jako deprecated
+
+```diff
+-# llm/client.py
+-
+-from __future__ import annotations
++&quot;&quot;&quot;
++DEPRECATED:
++  Tento modul byl nahrazen centralizovaným klientem v llm/client.py.
++  Nepoužívej ho v novém kódu. Bude odstraněn po migraci všech volání.
++&quot;&quot;&quot;
++
++from __future__ import annotations
+```
+
+(Není nutné dělat další změny, pokud žádný kód tento modul nepoužívá.)
+
+---
+
+### Krok 7: Dopad na testy a kompatibilitu
+
+- Ze seznamu testů:
+  - `tests/test_domain_rules.py`
+  - `tests/test_judikatura_engine.py`
+  - `tests/test_runtime_pipeline.py`
+  - `tests/test_core_legal_engine.py`
+- Dosavadní `LLMClient` defaultuje na backend `&quot;mock&quot;` (není-li `LLM_BACKEND=openai` + klíč).
+  - To by mělo zachovat stávající chování testů, pokud:
+    - testy nebyly závislé na předchozím `llm/config.py` (což z dostupného výpisu nevypadá),
+    - testy nečekají konkrétní hodnotu `OPENAI_MODEL` (kterou nyní nahradí model z YAML, ale v mock režimu to stejně není relevantní).
+- Změna signatury `_chat_openai` je vnitřní; `chat(...)` API zůstává stejné.
+- Pokud by existoval test, který:
+  - explicitně importuje `llm.config.LLMClient` nebo `llm.config.LLMMessage`,
+  - nebo zkoumá `OPENAI_MODEL`,
+  → bylo by nutné:
+    - buď test upravit na nový klient (`llm.client`),
+    - nebo dočasně poskytnout kompatibilní wrapper (ale to by odporovalo snaze odstranit duplicitu).
+- Doporučení:
+  - Spustit testy po úpravách.
+  - Pokud něco selže, zapsat konkrétní důvod do reportu (např. „test X přímo importuje llm.config“), a upravit test tak, aby:
+    - používal `llm.client.LLMClient`,
+    - nevyžadoval přítomnost reálného API key (testy by měly běžet v mock režimu).
+
+---
+
+## 4. Nejasnosti / otevřené otázky
+
+1. **Skutečné použití `llm/config.py`**:
+   - Z daného výpisu není vidět, že by jej někdo importoval.
+   - Je potřeba projít celý repo (grep na `from llm.config import` / `llm.config.LLMClient`) a potvrdit, že není používán.
+2. **Granularita use_case v YAML**:
+   - Dnes jsou jen `legal_analysis` vs `helper`.
+   - Pro budoucí čistotu by bylo vhodné:
+     - buď definovat další klíče (`judikatura_search`, `risk_assessment`, `output_polish`, …),
+     - nebo formálně říct, že všechny tyto use-case patří do kategorie „helper“.
+3. **Potenciální konfigurace LLM parametrů v engine-specific YAML**:
+   - Např. `engines/core_legal/config.yaml` může obsahovat něco jako „mode: skeleton/llm, llm_use: legal_analysis“.
+   - Je potřeba zkontrolovat, zda se tam nesnaží duplikovat LLM parametry; pokud ano, navrhnout jejich odstranění ve prospěch centralizace v `llm/config.yaml`.
+
+---
+
+## 5. Shrnutí navržených kroků pro vývojáře
+
+1. **Oficiální klient**
+   - Potvrdit `llm/client.py` jako jediného LLM klienta.
+   - Přidat dokumentační zmínku (README/docs).
+
+2. **Konfigurace z YAML**
+   - Implementovat v `llm/client.py` funkci `_get_default_params(use_case)` využívající `llm/config.yaml`.
+   - Upravit `LLMClient.chat` a `_chat_openai` podle navrženého diffu.
+
+3. **Deprecace starého klienta**
+   - Označit `llm/config.py` jako deprecated (komentář).
+   - Projít repo a ověřit, že nikdo tento modul nepoužívá; pokud ano, přepsat importy na `llm.client`.
+
+4. **Sjednocení engine volání**
+   - Otevřít:
+     - `engines/core_legal/engine.py`
+     - `engines/judikatura/engine.py`
+     - `engines/risk/engine.py`
+     - `engines/output/*`
+   - Najít všechna LLM volání a přepsat je na `LLMClient.chat(use_case, messages, ...)` s použitím `LLMMessage`.
+   - Zajistit, aby žádný engine nepoužíval přímo `openai` ani `llm/config.py`.
+
+5. **Testy**
+   - Spustit stávající testy.
+   - Pokud některý test očekává staré chování (import z `llm.config` nebo závislost na reálném API), upravit jej:
+     - tak, aby pracoval v mock režimu,
+     - s oficiálním klientem `llm.client`.
+
+6. **Další fáze (Stage 2+) – návrh do budoucna**
+   - Rozšířit `llm/config.yaml` o explicitní sekci `use_cases:` s parametry pro jednotlivé enginy (místo dvou pevných větví).
+   - Přidat jednoduchý logger / structured logging do `LLMClient` pro lepší debugging (místo případných `print`).
+   - Připravit jednotný enum/konstanty pro use_case (např. v `llm/client.py`), aby se minimalizovaly překlepy v názvech.
 ================================================================================
 </pre>
 </body>
