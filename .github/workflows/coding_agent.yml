@@ -8,9 +8,8 @@ on:
         required: true
         default: "Analyzuj strukturu repozitáře Právní strážce a navrhni další kroky."
 
-# Dovolí workflow zapisovat do repozitáře (commit + push)
 permissions:
-  contents: write
+  contents: write   # aby mohl commitovat změny
 
 jobs:
   run-agent:
@@ -23,7 +22,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # pro jistotu, když se pushuje zpět na stejnou větev
+          fetch-depth: 0   # kvůli push zpět na stejnou větev
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -34,15 +33,75 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Run coding agent and save report
+      - name: Run coding agent and save raw text report
         run: |
-          mkdir -p out
-          python coding_agent.py "${{ inputs.task }}" > out/last_report.txt
+          mkdir -p tmp
+          python coding_agent.py "${{ inputs.task }}" > tmp/last_report.txt
 
-      - name: Commit and push last report
+      - name: Wrap report into HTML for GitHub Pages
+        run: |
+          mkdir -p docs
+          python - << 'EOF'
+          from pathlib import Path
+          import html
+
+          # načti čistý text reportu od agenta
+          raw_path = Path("tmp/last_report.txt")
+          text = raw_path.read_text(encoding="utf-8")
+
+          # jednoduchá HTML šablona – nic fancy, jen aby to šlo načíst jako stránka
+          body = f"<pre>{html.escape(text)}</pre>"
+
+          html_doc = f"""<!DOCTYPE html>
+          <html lang="cs">
+          <head>
+              <meta charset="UTF-8">
+              <title>Právní strážce – poslední report agenta</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                  body {{
+                      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                      margin: 2rem;
+                      line-height: 1.5;
+                      background: #0f172a;
+                      color: #e5e7eb;
+                  }}
+                  pre {{
+                      white-space: pre-wrap;
+                      word-wrap: break-word;
+                      background: #020617;
+                      padding: 1.5rem;
+                      border-radius: 0.75rem;
+                      border: 1px solid #1f2937;
+                      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                  }}
+                  h1 {{
+                      font-size: 1.5rem;
+                      margin-bottom: 1rem;
+                  }}
+                  .meta {{
+                      font-size: 0.85rem;
+                      color: #9ca3af;
+                      margin-bottom: 0.5rem;
+                  }}
+              </style>
+          </head>
+          <body>
+              <h1>Právní strážce – poslední report agenta</h1>
+              <div class="meta">Tento soubor generuje GitHub Action z repozitáře catsystemexe/pravni-strazce.</div>
+              {body}
+          </body>
+          </html>
+          """
+
+          out_path = Path("docs/last_report.html")
+          out_path.write_text(html_doc, encoding="utf-8")
+          EOF
+
+      - name: Commit and push last_report.html
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add out/last_report.txt
-          git commit -m "Update last agent report" || echo "No changes to commit"
+          git add docs/last_report.html
+          git commit -m "Update last agent report (HTML for GitHub Pages)" || echo "No changes to commit"
           git push
