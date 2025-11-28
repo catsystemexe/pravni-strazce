@@ -8,6 +8,10 @@ on:
         required: true
         default: "Analyzuj strukturu repozitáře Právní strážce a navrhni další kroky."
 
+# Dovolí workflow zapisovat do repozitáře (commit + push)
+permissions:
+  contents: write
+
 jobs:
   run-agent:
     runs-on: ubuntu-latest
@@ -18,6 +22,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # pro jistotu, když se pushuje zpět na stejnou větev
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -31,10 +37,12 @@ jobs:
       - name: Run coding agent and save report
         run: |
           mkdir -p out
-          python coding_agent.py "${{ inputs.task }}" > out/last_agent_report.md
+          python coding_agent.py "${{ inputs.task }}" > out/last_report.txt
 
-      - name: Upload report artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: last-agent-report
-          path: out/last_agent_report.md
+      - name: Commit and push last report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add out/last_report.txt
+          git commit -m "Update last agent report" || echo "No changes to commit"
+          git push
