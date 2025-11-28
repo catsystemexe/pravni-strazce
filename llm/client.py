@@ -139,9 +139,8 @@ class LLMClient:
         """
         Jednoduchý mock pro testy a vývoj bez API klíče.
         """
-        # Tady nech klidně svou stávající implementaci – dávám jen placeholder:
         last_user_content = ""
-        for m in messages[::-1]:
+        for m in reversed(messages):
             if m.role == "user":
                 last_user_content = m.content
                 break
@@ -151,10 +150,11 @@ class LLMClient:
                 "Mock LLM odpověď pro právní analýzu.\n\n"
                 f"Poslední uživatelský vstup byl:\n{last_user_content}"
             )
+
         if use_case == "jurisprudence_search":
             return (
                 '{"judikatura": [], "poznámka": "Mock judikatura – '
                 'reálné napojení na zdroj ještě není hotové."}'
             )
 
-        return f"Mock LLM odpověď (use_case={use_case})."        return f"Mock LLM odpověď (use_case={use_case})."
+        return f"Mock LLM odpověď (use_case={use_case})."
