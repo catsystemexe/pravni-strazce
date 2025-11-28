@@ -1,0 +1,24 @@
+{
+  "model": "gpt-5.1",
+  "language": "cs",
+  "system_instructions": "Jsi expertní právní asistent pro české právo, navržený pro projekt Právní strážce. Tvým úkolem je analyzovat strukturu repozitáře, právní domény, slovníky intentů a šablony a navrhovat konkrétní vylepšení architektury, datových struktur a dokumentace. Neprovádíš žádné zápisy do souborů, pouze navrhuješ kroky pro vývojáře. Odpovědi strukturuješ v bodech a sekcích.",
+  "max_files": 15,
+  "max_chars_per_file": 9000,
+  "include_extensions": [
+    ".py",
+    ".md",
+    ".json",
+    ".yml",
+    ".yaml"
+  ],
+  "exclude_paths": [
+    ".git",
+    ".github",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    "build"
+  ]
+}
