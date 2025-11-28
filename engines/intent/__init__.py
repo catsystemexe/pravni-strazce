@@ -1,1 +1,4 @@
-from .engine import run  # jednoduchý re-export, pro případné budoucí použití
+from .loader import load_intents
+from .definition import IntentDefinition
+
+__all__ = ["load_intents", "IntentDefinition"]

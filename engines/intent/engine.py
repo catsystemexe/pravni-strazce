@@ -1,121 +1,223 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from engines.shared_types import EngineInput, EngineOutput
+from .loader import load_intents, IntentDefinition
+from llm.client import LLMClient, LLMMessage
 
 
 def _lower(s: str | None) -> str:
     return (s or "").lower()
 
 
-def _score_keywords(text: str, keywords: List[str]) -> int:
-    return sum(1 for kw in keywords if kw in text)
+# -----------------------------
+# 1) Cache intent definic
+# -----------------------------
+
+_INTENTS_CACHE: Optional[List[IntentDefinition]] = None
 
 
-def run(engine_input: EngineInput) -> EngineOutput:
+def get_intent_definitions() -> List[IntentDefinition]:
     """
-    Intent & Domain Engine v1 – čistě heuristický.
-
-    Vstup:
-      context["case"]["user_query"] – text dotazu
-
-    Výstup:
-      payload = {
-        "intent": "...",
-        "domain": "...",
-        "keywords": [...],
-        "confidence": float 0.0–1.0,
-      }
+    Načte a cacheuje definice intentů z data/intents/*.json.
     """
-    ctx = engine_input.context or {}
-    case = ctx.get("case", {}) or {}
-    user_query = _lower(case.get("user_query", ""))
+    global _INTENTS_CACHE
+    if _INTENTS_CACHE is None:
+        _INTENTS_CACHE = load_intents()
+    return _INTENTS_CACHE
 
-    # ---------------------------
-    # 1) Heuristiky pro intent
-    # ---------------------------
+
+# -----------------------------
+# 2) LLM klient (volitelný doplněk)
+# -----------------------------
+
+_LLM: Optional[LLMClient] = None
+
+
+def get_llm() -> LLMClient:
+    """
+    Lazy inicializace LLMClient – aby se nenačítal, když běžíme čistě
+    v mock režimu / bez LLM.
+    """
+    global _LLM
+    if _LLM is None:
+        _LLM = LLMClient()
+    return _LLM
+
+
+# -----------------------------
+# 3) Heuristická klasifikace
+# -----------------------------
+
+def _heuristic_classify(user_query: str) -> Dict[str, Any]:
+    """
+    Heuristické přiřazení intentu a domény na základě
+    data/intents/*.json (IntentDefinition).
+
+    Vrací dict:
+
+    {
+        "intent": str,
+        "domain": str,
+        "intent_group": str,
+        "intent_scores": {id: score},
+        "domain_scores": {domain: score},
+        "matched_keywords": [...],
+        "max_intent_score": int,
+        "max_domain_score": int,
+    }
+    """
+    text = _lower(user_query)
+
     intent_scores: Dict[str, int] = {}
+    domain_scores: Dict[str, int] = {}
+    intent_groups: Dict[str, str] = {}
+    matched_keywords: List[str] = []
 
-    def add_intent_score(intent: str, kws: List[str]) -> None:
-        intent_scores[intent] = intent_scores.get(intent, 0) + _score_keywords(user_query, kws)
+    for intent_def in get_intent_definitions():
+        score = 0
 
-    add_intent_score("document_check", ["smlouv", "dokument", "zjistit, jestli", "zákonné", "legální"])
-    add_intent_score("complaint", ["stížnost", "stiznost", "odvolán", "odvolani", "napadnout", "nesouhlasím", "nesouhlasim"])
-    add_intent_score("criminal_defense", ["trestn", "policie", "pčr", "pcr", "obviněn", "obvinen", "podezření", "podezreni", "výslechu", "vyslechu"])
-    add_intent_score("school_dispute", ["škola", "skola", "ředitel", "reditel", "učitel", "ucitel", "žák", "zak", "student", "ospod", "pedagog"])
-    add_intent_score("inheritance", ["dědictv", "dedictv", "notář", "notar", "pozůstalost", "pozustalost"])
-    add_intent_score("info", ["chci vědět", "chci vedet", "jak funguje", "jak to funguje"])
+        # bezpečný přístup – starší JSONy nemusí mít keywords / negative_keywords
+        keywords = getattr(intent_def, "keywords", None) or []
+        negative_keywords = getattr(intent_def, "negative_keywords", None) or []
 
-    # fallback intent – pokud nic netrefíme
+        # pozitivní klíčová slova
+        for kw in keywords:
+            kw_l = kw.lower()
+            if kw_l in text:
+                score += 1
+                if kw not in matched_keywords:
+                    matched_keywords.append(kw)
+
+        # negativní klíčová slova – penalizace, aby se intent nechytil omylem
+        for neg in negative_keywords:
+            if neg.lower() in text:
+                score -= 2
+
+        if score <= 0:
+            continue
+
+        intent_id = intent_def.intent_id
+        domain_id = intent_def.domain
+
+        intent_scores[intent_id] = intent_scores.get(intent_id, 0) + score
+        domain_scores[domain_id] = domain_scores.get(domain_id, 0) + score
+
+        # pokud má intent definované intent_group, uložíme si ho
+        group = getattr(intent_def, "intent_group", None)
+        if group:
+            intent_groups[intent_id] = group
+
+    # fallbacky
     dominant_intent = "general"
+    dominant_intent_group = "info"
+    dominant_domain = "unknown"
     max_intent_score = 0
+    max_domain_score = 0
+
     for k, v in intent_scores.items():
         if v > max_intent_score:
             max_intent_score = v
             dominant_intent = k
 
-    # ---------------------------
-    # 2) Heuristiky pro domain
-    # ---------------------------
-    domain_scores: Dict[str, int] = {}
+    # odvození intent_group z nejlepšího intentu
+    if dominant_intent in intent_groups:
+        dominant_intent_group = intent_groups[dominant_intent]
 
-    def add_domain_score(domain: str, kws: List[str]) -> None:
-        domain_scores[domain] = domain_scores.get(domain, 0) + _score_keywords(user_query, kws)
-
-    # občanské / majetkové
-    add_domain_score("civil", ["smlouv", "náhrada škody", "nahrada skody", "majetek", "závazek", "zavazek"])
-    # trestní
-    add_domain_score("criminal", ["trestn", "policie", "pčr", "pcr", "obviněn", "obvinen", "výslechu", "vyslechu"])
-    # rodinné
-    add_domain_score("family", ["nezletil", "dcera", "syn", "dítě", "dite", "péče", "pece", "rozvod", "výživn", "vyzivn"])
-    # správní
-    add_domain_score("administrative", ["úřad", "urad", "rozhodnutí", "rozhodnuti", "správní řízen", "spravni rizen"])
-    # školské
-    add_domain_score("school", ["škola", "skola", "učitel", "ucitel", "ředitel", "reditel", "čši", "csi", "ospod"])
-    # dědické
-    add_domain_score("inheritance", ["dědictv", "dedictv", "notář", "notar", "pozůstalost", "pozustalost"])
-
-    dominant_domain = "unknown"
-    max_domain_score = 0
     for k, v in domain_scores.items():
         if v > max_domain_score:
             max_domain_score = v
             dominant_domain = k
 
-    # ---------------------------
-    # 3) Confidence + keywords
-    # ---------------------------
-    # hrubý odhad – čím více trefených klíčových slov, tím vyšší confidence
-    # (normujeme na rozsah 0.0–1.0)
+    return {
+        "intent": dominant_intent,
+        "domain": dominant_domain,
+        "intent_group": dominant_intent_group,
+        "intent_scores": intent_scores,
+        "domain_scores": domain_scores,
+        "matched_keywords": matched_keywords,
+        "max_intent_score": max_intent_score,
+        "max_domain_score": max_domain_score,
+    }
+
+
+# -----------------------------
+# 4) Veřejný vstup enginu
+# -----------------------------
+
+def run(engine_input: EngineInput) -> EngineOutput:
+    """
+    Intent & Domain Engine v2 – data-driven heuristika + volitelný LLM doplněk.
+
+    Vstup:
+      context["case"]["user_query"] – text dotazu
+
+    Výstup v payload:
+      {
+        "intent": "...",
+        "domain": "...",
+        "intent_group": "...",
+        "keywords": [...],
+        "confidence": float 0.0–1.0,
+        "raw_intent_scores": {...},
+        "raw_domain_scores": {...},
+        "llm_raw": str | None,   # volitelný LLM názor
+      }
+    """
+    ctx = engine_input.context or {}
+    case = ctx.get("case", {}) or {}
+    user_query = case.get("user_query", "") or ""
+
+    # 1) heuristika nad data/intents/*
+    h = _heuristic_classify(user_query)
+
+    max_intent_score: int = h["max_intent_score"]
+    max_domain_score: int = h["max_domain_score"]
+    raw_intent_scores: Dict[str, int] = h["intent_scores"]
+    raw_domain_scores: Dict[str, int] = h["domain_scores"]
+    matched_keywords: List[str] = h["matched_keywords"]
+
+    # hrubý odhad confidence – čím víc tref, tím vyšší
     raw_score = max(max_intent_score, max_domain_score)
     confidence = min(1.0, raw_score / 5.0) if raw_score > 0 else 0.0
 
-    # sesbíráme klíčová slova, která jsme použili (pro debug)
-    matched_keywords: List[str] = []
-    for intent, kws in [
-        ("document_check", ["smlouv", "dokument", "zjistit, jestli", "zákonné", "legální"]),
-        ("complaint", ["stížnost", "stiznost", "odvolán", "odvolani", "napadnout", "nesouhlasím", "nesouhlasim"]),
-        ("criminal_defense", ["trestn", "policie", "pčr", "pcr", "obviněn", "obvinen", "podezření", "podezreni", "výslechu", "vyslechu"]),
-        ("school_dispute", ["škola", "skola", "ředitel", "reditel", "učitel", "ucitel", "žák", "zak", "student", "ospod", "pedagog"]),
-        ("inheritance", ["dědictv", "dedictv", "notář", "notar", "pozůstalost", "pozustalost"]),
-        ("info", ["chci vědět", "chci vedet", "jak funguje", "jak to funguje"]),
-    ]:
-        for kw in kws:
-            if kw in user_query and kw not in matched_keywords:
-                matched_keywords.append(kw)
+    # 2) volitelný LLM doplněk – jen když je jistota nízká a backend je openai
+    llm_raw: Optional[str] = None
+    try:
+        llm = get_llm()
+        if getattr(llm, "backend", "mock") == "openai" and confidence < 0.4:
+            # TODO: ideálně načíst prompt z intent_classification.md
+            system_prompt = (
+                "Jsi právní klasifikační modul. Na základě dotazu urči "
+                "pravděpodobný právní intent a doménu. Odpovídej stručně, "
+                "ideálně ve strukturovaném JSON."
+            )
+            messages = [
+                LLMMessage(role="system", content=system_prompt),
+                LLMMessage(role="user", content=user_query),
+            ]
+            llm_raw = llm.chat(use_case="helper", messages=messages)
+    except Exception:
+        # Jakýkoliv problém s LLM nesmí shodit engine – prostě LLM ignorujeme
+        llm_raw = None
 
     payload: Dict[str, Any] = {
-        "intent": dominant_intent,
-        "domain": dominant_domain,
+        "intent": h["intent"],
+        "domain": h["domain"],
+        "intent_group": h["intent_group"],
         "keywords": matched_keywords,
         "confidence": confidence,
-        "raw_intent_scores": intent_scores,
-        "raw_domain_scores": domain_scores,
+        "raw_intent_scores": raw_intent_scores,
+        "raw_domain_scores": raw_domain_scores,
+        "llm_raw": llm_raw,
     }
 
     notes: List[str] = [
-        f"intent_engine: intent={dominant_intent}, domain={dominant_domain}, confidence={confidence}"
+        f"intent_engine: intent={h['intent']}, "
+        f"domain={h['domain']}, "
+        f"intent_group={h['intent_group']}, "
+        f"confidence={confidence}"
     ]
 
     return EngineOutput(
@@ -123,3 +225,4 @@ def run(engine_input: EngineInput) -> EngineOutput:
         payload=payload,
         notes=notes,
     )
+
