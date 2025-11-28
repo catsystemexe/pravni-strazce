@@ -38,344 +38,199 @@
     <pre>================================================================================
 ODPOVĚĎ CODING AGENTA:
 
-## 1. Co chápu ze struktury projektu
+1. Co chápu ze struktury projektu
+---------------------------------
 
-- Projekt je core framework pro „Právní strážce“, rozdělený na:
-  - `runtime/` (orchestrátor, config loader),
-  - `engines/` (core_legal, judikatura, risk, intent, output, memory, safety),
-  - `llm/` (LLM klient + konfigurace + prompts),
-  - `data/` (intents, doménové schéma),
-  - `templates/` (výstupní šablony),
-  - `packs/` (product/packs konfigurace),
-  - API vrstvy (`api/cli.py`, `api/http_server.py`),
-  - nástroje (`tools/validate_data.py`, `tools/apply_policy.py`).
-- LLM integrace je v přechodovém stavu:
-  - `llm/client.py` = jednoduchý klient s env řízeným backendem (`mock` / `openai`), bez čtení `llm/config.yaml`, s voláním OpenAI přes `OPENAI_MODEL` env.
-  - `llm/config.py` = jiný LLM klient, který:
-    - načítá `llm/config.yaml` přes `runtime.config_loader.load_yaml`,
-    - má vlastní `LLMMessage` a `LLMClient`,
-    - vybírá model/temperature/max_tokens podle `use_case` (legal_analysis vs helper),
-    - předpokládá přítomný `OPENAI_API_KEY` a nepodporuje fallback na mock.
-  - `llm/config.yaml` = centrální YAML s modely a parametry.
+- Projekt je jádro („core framework“) pro právního asistenta, rozdělený na:
+  - **runtime/**: orchestrátor, konfigurace, doménový katalog.
+  - **engines/**: specializované moduly (core_legal, judikatura, risk, safety, intent, memory, output).
+  - **llm/**: LLM vrstva (aktuálně dva různé klienty: `llm/client.py` a `llm/config.py` + `config.yaml`).
+  - **data/**: domény, intents (JSON definice konkrétních intentů podle oblastí práva).
+  - **templates/** a **prompts/**: textové šablony výstupu a politik.
+  - **product/**, **packs/**: produktové konfigurace a balíčky (např. family/civil).
+  - **api/**, **demo.py**: tenké vstupní vrstvy (CLI, demo, budoucí HTTP API).
+- LLM se dnes používá:
+  - v **coding_agent.py** přes přímo importovaný `openai.OpenAI`,
+  - v **llm/client.py** (mock/OpenAI wrapper s env řízením),
+  - v **llm/config.py**, který definuje jiného `LLMClient`a s konfigurací z `config.yaml`.
+- Cíl vašeho úkolu je: **konsolidovat LLM vrstvu tak, aby existoval jediný oficiální klient v `llm/client.py`, konfigurovaný přes `llm/config.yaml`, a ostatní přímé openai použití byly pouze označeny / navrženy k náhradě**.
 
-Dnes tedy existují dva paralelní koncepty LLM klienta a dva různé zdroje konfigurace modelu (env vs YAML).
+Níže postupuji dle zadání (včetně části, které zatím nemohu plně splnit, protože nemám obsah všech souborů – to vždy explicitně označím).
 
----
 
-## 2. Stručný report a návrh směru
+2. Analýza stavu LLM klientů (před úpravami)
+-------------------------------------------
 
-### 2.1 Co jsem našel v `llm/`
+### 2.1. Kde se importuje `openai` a kde `llm.client` / `llm.config`
 
-1. `llm/client.py`
-   - Definuje:
-     - `Role` = Literal[&quot;system&quot;, &quot;user&quot;, &quot;assistant&quot;].
-     - `LLMMessage` (role, content).
-     - `LLMClient` s:
-       - autodetekcí backendu z `LLM_BACKEND` (`mock` default).
-       - lazy importem `openai.OpenAI`, fallback na mock pokud chybí `OPENAI_API_KEY` nebo import selže.
-       - metodou `chat(use_case, messages, temperature=None, max_tokens=None)`:
-         - pokud backend == &quot;openai&quot; → `_chat_openai(...)`, jinak `_chat_mock(...)`.
-       - `_chat_openai`:
-         - bere model z `OPENAI_MODEL` (default `gpt-4.1-mini`),
-         - volá `client.chat.completions.create`.
-       - `_chat_mock`:
-         - rozlišuje `use_case` aspoň pro:
-           - `&quot;legal_analysis&quot;` → textový mock,
-           - `&quot;jurisprudence_search&quot;` → JSON-like string.
-   - Zatím nepracuje s `llm/config.yaml` a nemá defaultní parametry podle use_case.
+Na základě poskytnutých výňatků:
 
-2. `llm/config.py`
-   - Načte `_CONFIG = load_yaml(&quot;llm/config.yaml&quot;)`.
-   - Definuje vlastní `LLMMessage` (role: str, content: str).
-   - `LLMClient.__init__`:
-     - vyžaduje `OPENAI_API_KEY` (jinak `RuntimeError` – žádný fallback).
-     - vytváří `OpenAI(api_key=api_key)`.
-   - `_get_params(use_case)`:
-     - `if use_case == &quot;legal_analysis&quot;` → použije:
-       - `model_defaults.legal_analysis_model`,
-       - `temperature.legal_analysis`,
-       - `max_tokens.legal_analysis`.
-     - jinak → `helper_model` + `helper` temperature + `helper` max_tokens.
-   - `chat(use_case, messages)`:
-     - nepodporuje přepis `temperature`/`max_tokens`,
-     - přímo volá OpenAI a vrací `resp.choices[0].message.content.strip()`.
+- **Přímý import OpenAI klienta**:
+  - `coding_agent.py`
+    - `from openai import OpenAI`
+    - Použití: `client = OpenAI()` a `client.responses.create(...)`
+  - `llm/client.py`
+    - Lazy import: `from openai import OpenAI` uvnitř `__init__` (jen pokud `LLM_BACKEND=openai`).
+  - `llm/config.py`
+    - `from openai import OpenAI  # nebo jiný oficiální klient`
 
-3. `llm/config.yaml`
-   - Definuje:
-     - `provider: &quot;openai&quot;`,
-     - `model_defaults.legal_analysis_model`, `helper_model`,
-     - `temperature.legal_analysis/helper`,
-     - `max_tokens.legal_analysis/helper`.
+- **Import vlastních LLM klientů**:
+  - V poskytnutých souborech **nikde** zatím nevidím import:
+    - `from llm.client import LLMClient, LLMMessage`  
+    - `from llm.config import LLMClient, LLMMessage`
+  - Je možné, že v dalších engine souborech (např. `engines/core_legal/engine.py`, `engines/judikatura/engine.py`, `engines/risk/engine.py`, `engines/output/*`, `runtime/*`) se nějaký LLM klient používá, ale jejich obsah zatím nemám.  
+    → **TODO pro vývojáře**: spustit v repu:
+    ```bash
+    rg &quot;from llm\.client import&quot; .
+    rg &quot;from llm\.config import&quot; .
+    rg &quot;\bOpenAI\b&quot; .
+    ```
+    a doplnit do další iterace reportu.
 
-4. `llm/prompts/`
-   - V tomto výpisu nebyl konkrétní obsah načten, ale typicky obsahuje prompt šablony pro enginy.
+### 2.2. Kde se přímo používá CLI/usage openai (CLI nástroj)
 
-### 2.2 Hlavní problémy
+Ve výňatcích není přímé použití CLI `openai api ...`. Vypadá to, že:
+- všude se používá přímo Python client `OpenAI`, nikoli CLI wrapper.
 
-- Dva různé LLM klienty:
-  - rozdílné API (signatura `chat`),
-  - rozdílný mechanismus konfigurace (YAML vs env),
-  - rozdílný přístup k absenci `OPENAI_API_KEY` (fatal vs fallback na mock).
-- YAML konfigurace modelů se nepromítá do „nového“ klienta.
-- Use-case řízení parametrů je jen v `llm/config.py`.
-- Není jasně deklarováno, který klient je „oficiální“.
+→ Reportuji, že **žádné** CLI volání typu `openai api` nebylo v ukázaných souborech.
 
-### 2.3 Směr řešení (v souladu s požadavky)
+### 2.3. Struktura souboru `llm/config.py` (současný stav)
 
-- „Oficiální“ klient: **`llm/client.py`**.
-- `llm/config.py`:
-  - označit jako **legacy/deprecated**,
-  - postupně odstavit; nové enginy a runtime mají používat `llm.client.LLMClient`.
-- Přenést čtení `llm/config.yaml` a mapování `use_case → (model, temperature, max_tokens)` do **`llm/client.py`**:
-  - přes `runtime.config_loader.load_yaml` (stejný mechanismus jako doteď),
-  - s možností přepsat `temperature`/`max_tokens` argumentem `chat(...)`.
-- Zachovat robustní fallback:
-  - pokud není `OPENAI_API_KEY` nebo import selže → vždy mock backend, žádný runtime crash.
-- Sjednotit enginy:
-  - `core_legal`, `judikatura`, `intent`, `risk`, `output` mají volat výhradně nový `LLMClient.chat(...)`,
-  - žádné přímé sahání do `llm/config.py` nebo vlastní OpenAI klienty.
+Současný `llm/config.py`:
 
----
+- Načítá YAML:
 
-## 3. Návrh konkrétních kroků
+  ```python
+  _CONFIG = load_yaml(&quot;llm/config.yaml&quot;)
+  ```
 
-### Krok 1: Zvolit „oficiální“ klient
+- Definuje **vlastního** `LLMMessage` (role, content) – duplicita s `llm/client.py`.
+- Definuje **jiného** `LLMClient`a, než je v `llm/client.py`:
 
-1. V dokumentaci (README nebo samostatný `docs/llm.md`) a v kódu:
-   - deklarovat `llm/client.py` jako **jediný oficiální LLM klient**.
-   - `llm/config.py` označit na úrovni komentářů jako deprecated.
+  - očekává `OPENAI_API_KEY` v env, jinak `raise RuntimeError(&quot;Chybí OPENAI_API_KEY...&quot;)` → tvrdý pád,
+  - pevně používá `OpenAI` klienta,
+  - `_get_params(use_case: str)`:
+    - pokud `use_case == &quot;legal_analysis&quot;` → použije:
+      - `model_defaults.legal_analysis_model`
+      - `temperature.legal_analysis`
+      - `max_tokens.legal_analysis`
+    - jinak:
+      - `model_defaults.helper_model`
+      - `temperature.helper`
+      - `max_tokens.helper`
+  - `chat(use_case, messages)`:
+    - sestaví `params = self._get_params(use_case)`
+    - zavolá:
+      ```python
+      resp = self.client.chat.completions.create(
+          messages=api_messages,
+          **params,
+      )
+      return resp.choices[0].message.content.strip()
+      ```
 
----
+=&gt; **Konflikt a duplicita**:
+- `llm/client.py` a `llm/config.py` definují dva různé LLM klienty.
+- `llm.client.LLMClient` je mock-first, fallback-friendly (bez tvrdého pádu).
+- `llm.config.LLMClient` je „strict“ (pád, pokud není API key), ale má podporu pro konfiguraci z YAML.
 
-### Krok 2: Rozšířit `llm/client.py` o čtení `llm/config.yaml`
+Zadání nyní chce:
+- použít **`llm/config.yaml`** jako zdroj konfigurace,
+- ale **kanonickým klientem** má být **`llm/client.py`** (rozšířený).
 
-Navrhovaný koncept (bez zápisu, jen struktura):
 
-1. Na začátek `llm/client.py` doplnit import a lazily načtenou konfiguraci:
+### 2.4. Jaké `use_case` hodnoty se reálně předávají do LLM
 
-```python
-from runtime.config_loader import load_yaml
-from typing import Dict, Tuple
+Z kódu, který mám:
 
-_LLM_CONFIG = load_yaml(&quot;llm/config.yaml&quot;)
+- V `llm/client.py` v `_chat_mock` vidíme explicitně:
+  - `use_case == &quot;legal_analysis&quot;` → generuje text „Mock LLM odpověď pro právní analýzu…“
+  - `use_case == &quot;jurisprudence_search&quot;` → vrací JSON-like string pro judikaturu.
+  - ostatní → `Mock LLM odpověď (use_case=...)`.
 
-def _get_default_params(use_case: str) -&gt; Tuple[str, float, int]:
-    &quot;&quot;&quot;
-    Vrátí (model, temperature, max_tokens) pro daný use_case na základě llm/config.yaml.
-    - use_case == &quot;legal_analysis&quot; → legal_analysis_model
-    - jinak → helper_model
-    &quot;&quot;&quot;
-    cfg = _LLM_CONFIG
-    if use_case == &quot;legal_analysis&quot;:
-        model = cfg[&quot;model_defaults&quot;][&quot;legal_analysis_model&quot;]
-        temperature = float(cfg[&quot;temperature&quot;][&quot;legal_analysis&quot;])
-        max_tokens = int(cfg[&quot;max_tokens&quot;][&quot;legal_analysis&quot;])
-    else:
-        model = cfg[&quot;model_defaults&quot;][&quot;helper_model&quot;]
-        temperature = float(cfg[&quot;temperature&quot;][&quot;helper&quot;])
-        max_tokens = int(cfg[&quot;max_tokens&quot;][&quot;helper&quot;])
-    return model, temperature, max_tokens
-```
+Z jiných souborů zatím `use_case` nevidím (enginy nemám rozbalené).
 
-2. Upravovat `LLMClient.chat` tak, aby:
-   - kombinoval YAML defaults s volitelnými parametry:
+→ Pravděpodobná sada `use_case`:
+- `legal_analysis` – core_legal engine.
+- `jurisprudence_search` – judikatura engine.
+- Další (hypoteticky): `risk_assessment`, `intent_classification`, `helper`, apod.
 
-```python
-    def chat(
-        self,
-        use_case: str,
-        messages: List[LLMMessage],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-    ) -&gt; str:
-        # načteme defaulty
-        model, default_temp, default_max_tokens = _get_default_params(use_case)
+Zadání přímo říká:
 
-        # umožníme override
-        temp = temperature if temperature is not None else default_temp
-        max_tok = max_tokens if max_tokens is not None else default_max_tokens
+&gt; - pro `jurisprudence_search` použij helper_model, helper teploty atd.
+&gt; - pro ostatní use_case využij legal_analysis_model, legal_analysis teplotu.
 
-        if self.backend == &quot;openai&quot; and self._openai_client is not None:
-            return self._chat_openai(
-                model=model,
-                messages=messages,
-                temperature=temp,
-                max_tokens=max_tok,
-            )
+To použiji v návrhu `_get_params_for_use_case`.
 
-        return self._chat_mock(use_case, messages)
-```
 
-3. Upravit `_chat_openai` signaturu:
+3. Návrh a implementační kroky v `llm/client.py`
+-------------------------------------------------
 
-```python
-    def _chat_openai(
-        self,
-        model: str,
-        messages: List[LLMMessage],
-        temperature: Optional[float],
-        max_tokens: Optional[int],
-    ) -&gt; str:
-        try:
-            api_messages = [{&quot;role&quot;: m.role, &quot;content&quot;: m.content} for m in messages]
+### 3.1. Cíl
 
-            resp = self._openai_client.chat.completions.create(  # type: ignore[union-attr]
-                model=model,
-                messages=api_messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            content = getattr(resp.choices[0].message, &quot;content&quot;, None)  # type: ignore[index]
-            return content or &quot;&quot;
-        except Exception as e:
-            return f&quot;[LLM ERROR] {e}&quot;
-```
+- `llm/client.py` bude:
+  - jediný oficiální LLM klient,
+  - zodpovědný za:
+    - načtení konfigurace z `llm/config.yaml` přes `runtime.config_loader.load_yaml`,
+    - výběr model/temperature/max_tokens podle `use_case`,
+    - volání OpenAI, s fallbackem do mock režimu (bez tvrdých pádů).
+- `llm/config.py` se stane **legacy/deprecated**, ale zawádí se jen dokumentační poznámka, žádné mazání.
 
-4. Tím pádem:
-   - `OPENAI_MODEL` env již není potřeba (model určuje YAML).
-   - `use_case` vždy vede k jasnému výběru parametrů.
+### 3.2. Konkrétní návrhy změn v `llm/client.py`
 
-**Nejasnost k doplnění do reportu:**  
-- V `llm/config.yaml` jsou zatím jen dvě větve (`legal_analysis` vs `helper`). Pokud budou další use_case (např. `judikatura_search`, `intent_classification`, `risk_assessment`), bude potřeba rozšířit YAML a `_get_default_params`. To je produktové rozhodnutí – zatím lze všechny ostatní use-cases mapovat na `helper`.
+1. **Načtení konfigurace z YAML**:
 
----
+   - Navrhuji přidat na začátek:
 
-### Krok 3: Označit `llm/config.py` jako legacy a deaktivovat přímé použití
+     ```python
+     from runtime.config_loader import load_yaml
 
-1. Do hlavičky `llm/config.py` přidat výrazný komentář:
+     _CONFIG = load_yaml(&quot;llm/config.yaml&quot;)
+     ```
 
-```python
-&quot;&quot;&quot;
-DEPRECATED: Tento modul byl nahrazen centralizovaným klientem v llm/client.py.
-Nepoužívej ho v novém kódu. Bude odstraněn po migraci všech volání.
-&quot;&quot;&quot;
-```
+2. **Helper funkce pro parametry** – např. `get_llm_params_for_use_case`:
 
-2. Pro jistotu (aby se omylem nepoužil):
-   - lze ponechat implementaci beze změny (kvůli případným starým importům),
-   - nebo, pokud v repozitáři není nikde importován, označit pro budoucí smazání v TODO.
+   - Podle požadavku:
 
-3. Pro Stage 1:
-   - jen označit jako legacy,
-   - neprovádět „tvrdé“ změny (aby se nepokazila kompatibilita, i když teď reálně zřejmě není používán žádnými enginy).
+     ```python
+     from typing import Dict
 
----
+     def get_llm_params_for_use_case(use_case: str) -&gt; Dict[str, Any]:
+         &quot;&quot;&quot;
+         Vrací dict s klíči: model, temperature, max_tokens
+         podle use_case a konfigurace v llm/config.yaml.
+         &quot;&quot;&quot;
+         model_defaults = _CONFIG.get(&quot;model_defaults&quot;, {})
+         temps = _CONFIG.get(&quot;temperature&quot;, {})
+         max_tokens_cfg = _CONFIG.get(&quot;max_tokens&quot;, {})
 
-### Krok 4: Zajistit robustitu při chybějícím `OPENAI_API_KEY`
+         if use_case == &quot;jurisprudence_search&quot;:
+             model = model_defaults.get(&quot;helper_model&quot;, &quot;gpt-4.1-mini&quot;)
+             temperature = float(temps.get(&quot;helper&quot;, 0.1))
+             max_tokens = int(max_tokens_cfg.get(&quot;helper&quot;, 800))
+         else:
+             model = model_defaults.get(&quot;legal_analysis_model&quot;, &quot;gpt-4.1-mini&quot;)
+             temperature = float(temps.get(&quot;legal_analysis&quot;, 0.2))
+             max_tokens = int(max_tokens_cfg.get(&quot;legal_analysis&quot;, 2000))
 
-Toto je již v `llm/client.py` do značné míry hotové – v `__init__`:
+         return {
+             &quot;model&quot;: model,
+             &quot;temperature&quot;: temperature,
+             &quot;max_tokens&quot;: max_tokens,
+         }
+     ```
 
-- pokud `OPENAI_API_KEY` chybí nebo import/klient selže → přepne backend na `&quot;mock&quot;`.
+3. **Úprava metody `chat`**:
 
-Doporučené drobné vylepšení:
+   - Požadavky:
+     - načte defaulty přes helper,
+     - umožní je přepsat parametry `temperature` a `max_tokens` (pokud jsou předány),
+     - při `backend == &quot;openai&quot;` zavolá `_chat_openai`,
+     - jinak `_chat_mock`.
 
-1. Explicitně logovat / poznámkovat důvod fallbacku (např. přes `print` nebo budoucí logger):
+   - Tedy zhruba:
 
-```python
-        if self.backend == &quot;openai&quot;:
-            api_key = os.getenv(&quot;OPENAI_API_KEY&quot;)
-            if not api_key:
-                # Bez klíče nemá smysl se snažit o openai režim
-                # TODO: nahradit loggerem
-                # print(&quot;LLMClient: OPENAI_API_KEY not set, falling back to mock backend.&quot;)
-                self.backend = &quot;mock&quot;
-                return
-            ...
-```
-
-2. V `_chat_openai` chyba se již převádí na text `&quot;[LLM ERROR] ...&quot;` – to je v souladu s požadavkem „raději degradovat než spadnout“.
-
----
-
-### Krok 5: Sjednotit volání LLM v enginech
-
-Z poskytnutého výpisu nejsou vidět v enginech žádná přímá volání LLM; nejspíš jsou v souborech, které zatím nemáme načtené (`engines/core_legal/engine.py`, `engines/judikatura/engine.py`, `engines/risk/engine.py`, `engines/output/...`).
-
-**Co je potřeba udělat (plán pro developera):**
-
-1. V každém LLM-based engine:
-   - najít všechna místa, kde se:
-     - přímo používá `openai` klient,
-     - nebo importuje `llm.config.LLMClient`,
-     - nebo se nějak jinak sahá na `OPENAI_API_KEY` / `OPENAI_MODEL`.
-2. Nahradit za použití `llm.client`:
-
-```python
-from llm.client import LLMClient, LLMMessage
-
-llm = LLMClient()
-
-messages = [
-    LLMMessage(role=&quot;system&quot;, content=&quot;...prompt...&quot;),
-    LLMMessage(role=&quot;user&quot;, content=user_text),
-]
-
-response_text = llm.chat(
-    use_case=&quot;legal_analysis&quot;,  # nebo jiný use_case dle engine
-    messages=messages,
-    # optional override:
-    # temperature=0.3,
-    # max_tokens=1000,
-)
-```
-
-3. Navržené mapování `use_case`:
-   - `engines/core_legal`:
-     - hlavní právní analýza → `use_case=&quot;legal_analysis&quot;`.
-   - `engines/judikatura`:
-     - hledání judikatury → např. `use_case=&quot;jurisprudence_search&quot;` (momentálně v mocku rozlišeno).
-   - `engines/intent`:
-     - pokud někdy bude LLM verze klasifikace → `use_case=&quot;helper&quot;` / `intent_classification`.
-   - `engines/risk`, `engines/output`, `engines/memory`, `engines/safety`:
-     - spíš krátké pomocné úlohy → mapovat na helper → `use_case=&quot;helper&quot;` (dokud nebude detailnější config).
-
-4. Zajistit, aby žádný engine již neimportoval `llm.config`:
-   - pokud něco takového existuje, přepsat import na `llm.client`.
-   - pokud engine bral `model`/`temperature` z jiného YAML (např. `engines/core_legal/config.yaml`), zvážit:
-     - zda to nemá být jen „business“ konfigurace (např. režim skeleton/llm),
-     - LLM parametry nechat jednotně v `llm/config.yaml`.
-
----
-
-### Krok 6: Návrh konkrétních diffů (konceptuálně)
-
-#### 6.1 `llm/client.py` – rozšíření o YAML konfiguraci
-
-```diff
-@@
--from dataclasses import dataclass
--from typing import List, Optional, Literal, Any
-+from dataclasses import dataclass
-+from typing import List, Optional, Literal, Any, Tuple
-+
-+from runtime.config_loader import load_yaml
-@@
- Role = Literal[&quot;system&quot;, &quot;user&quot;, &quot;assistant&quot;]
-@@
- class LLMMessage:
-     role: Role
-     content: str
-+
-+
-+_LLM_CONFIG = load_yaml(&quot;llm/config.yaml&quot;)
-+
-+
-+def _get_default_params(use_case: str) -&gt; Tuple[str, float, int]:
-+    &quot;&quot;&quot;
-+    Vrátí (model, temperature, max_tokens) pro daný use_case
-+    na základě llm/config.yaml.
-+    &quot;&quot;&quot;
-+    cfg = _LLM_CONFIG
-+    if use_case == &quot;legal_analysis&quot;:
-+        model = cfg[&quot;model_defaults&quot;][&quot;legal_analysis_model&quot;]
-+        temperature = float(cfg[&quot;temperature&quot;][&quot;legal_analysis&quot;])
-+        max_tokens = int(cfg[&quot;max_tokens&quot;][&quot;legal_analysis&quot;])
-+    else:
-+        model = cfg[&quot;model_defaults&quot;][&quot;helper_model&quot;]
-+        temperature = float(cfg[&quot;temperature&quot;][&quot;helper&quot;])
-+        max_tokens = int(cfg[&quot;max_tokens&quot;][&quot;helper&quot;])
-+    return model, temperature, max_tokens
-@@
+     ```python
      def chat(
          self,
          use_case: str,
@@ -383,152 +238,455 @@ response_text = llm.chat(
          temperature: Optional[float] = None,
          max_tokens: Optional[int] = None,
      ) -&gt; str:
-@@
+         params = get_llm_params_for_use_case(use_case)
+         if temperature is not None:
+             params[&quot;temperature&quot;] = float(temperature)
+         if max_tokens is not None:
+             params[&quot;max_tokens&quot;] = int(max_tokens)
+
+         if self.backend == &quot;openai&quot; and self._openai_client is not None:
+             return self._chat_openai(messages, params)
+
+         return self._chat_mock(use_case, messages)
+     ```
+
+4. **Úprava `_chat_openai`**:
+
+   - Má přijímat `params` jako argument (žádné čtení model/temperature/max_tokens z env).
+   - Musí brát `model` z `params[&quot;model&quot;]`.
+
+   - Úprava signatury a implementace:
+
+     ```python
+     def _chat_openai(
+         self,
+         messages: List[LLMMessage],
+         params: Dict[str, Any],
+     ) -&gt; str:
+         try:
+             api_messages = [{&quot;role&quot;: m.role, &quot;content&quot;: m.content} for m in messages]
+
+             resp = self._openai_client.chat.completions.create(  # type: ignore[union-attr]
+                 messages=api_messages,
+                 **params,
+             )
+
+             content = getattr(resp.choices[0].message, &quot;content&quot;, None)  # type: ignore[index]
+             return content or &quot;&quot;
+         except Exception as e:
+             return f&quot;[LLM ERROR] {e}&quot;
+     ```
+
+   - **Odstranit** závislost na env `OPENAI_MODEL` v `_chat_openai`.
+
+5. **Robustní fallback**:
+
+   - Již dnes:
+
+     ```python
+     api_key = os.getenv(&quot;OPENAI_API_KEY&quot;)
+     if not api_key:
+         self.backend = &quot;mock&quot;
+     else:
+         try:
+             from openai import OpenAI
+             self._openai_client = OpenAI(api_key=api_key)
+         except Exception:
+             self.backend = &quot;mock&quot;
+             self._openai_client = None
+     ```
+
+   - Toto splňuje zadání:
+     - pokud není API klíč nebo selže import → backend přepne na `mock`.
+     - nikdy nepadá na absenci klíče.
+   - Není třeba měnit, jen doplníme komentář, že „legacy `llm.config.LLMClient` s raise RuntimeError je deprecated“.
+
+6. **Zachování existujícího chování mocku**:
+
+   - `_chat_mock` už umí rozlišit `legal_analysis` vs `jurisprudence_search` vs ostatní.
+   - Ponechávám beze změny (max. lehký komentář).
+
+
+4. Deprecation `llm/config.py`
+------------------------------
+
+### 4.1. Cíl
+
+- `llm/config.py` má být **označen jako legacy/deprecated** a nahrazen `llm/client.py`.
+- V této fázi:
+  - nic nemazat,
+  - žádné breaking změny,
+  - přidat pouze výrazný CZ/EN komentář nahoře.
+
+### 4.2. Navržený komentář
+
+Na úplný začátek `llm/config.py` (před `from __future__ import annotations`):
+
+```python
+# =============================================================================
+# DEPRECATED / LEGACY MODULE
+#
+# Tento modul (llm/config.py) je považován za **DEPRECATED**.
+# Původně obsahoval alternativního LLMClienta vázaného na llm/config.yaml.
+#
+# Nově je jediným oficiálním LLM klientem:
+#     `llm.client.LLMClient` a `llm.client.LLMMessage`
+#
+# Všechny nové enginy a kód by měly používat `llm.client`.
+# Tento modul je zde pouze z historických důvodů a může být v budoucnu odstraněn.
+# =============================================================================
+```
+
+Kód níže se nemění, aby se nic nerozbilo pro případné staré importy.
+
+
+5. Scan engine vrstvy (READ-ONLY, bez refaktoringu)
+----------------------------------------------------
+
+V této iteraci mám obsah pouze:
+
+- `engines/shared_types.py`
+- `engines/intent/engine.py`
+- `engines/intent/prompts/intent_classification.md`
+
+Nemám obsah:
+
+- `engines/core_legal/engine.py`
+- `engines/judikatura/engine.py`
+- `engines/risk/engine.py`
+- `engines/output/*`
+- `engines/memory/*`
+- `engines/safety/*`
+- `runtime/*`
+
+Proto:
+
+### 5.1. Co vím jistě
+
+- Ve výše uvedených souborech **není** žádný:
+  - import `openai`,
+  - import `llm.client`,
+  - import `llm.config`,
+  - přímé volání OpenAI.
+
+### 5.2. Co je potřeba doplnit (TODO)
+
+Abych mohl vypsat *přesný seznam souborů + řádků*, kde se ještě používá staré LLM volání, je potřeba:
+
+- projít zbývající soubory; doporučuji vývojáři spustit:
+
+  ```bash
+  rg &quot;from openai import&quot; .
+  rg &quot;\bOpenAI\b&quot; .
+  rg &quot;from llm\.config import&quot; .
+  rg &quot;from llm\.client import&quot; .
+  rg &quot;LLMClient&quot; engines runtime
+  ```
+
+- a získané hity přiložit do další iterace – potom:
+  - přidám tabulku `soubor:řádek → starý způsob → návrh nové podoby`.
+
+
+6. Návrhy refaktoringu (bez přímé editace) pro soubory používající staré volání
+-------------------------------------------------------------------------------
+
+Na základě aktuálně známého stavu:
+
+### 6.1. Příklady náhrady pro přímé OpenAI volání (obecný vzor)
+
+**Starý styl (schematicky):**
+
+```python
+from openai import OpenAI
+
+client = OpenAI(api_key=...)
+
+resp = client.chat.completions.create(
+    model=&quot;...&quot;,
+    messages=[{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;...&quot;}],
+    temperature=0.2,
+    max_tokens=1000,
+)
+
+text = resp.choices[0].message.content
+```
+
+**Nový doporučený styl přes jednotný LLM klient:**
+
+```python
+from llm.client import LLMClient, LLMMessage
+
+llm = LLMClient()
+
+messages = [
+    LLMMessage(role=&quot;system&quot;, content=&quot;...&quot;),  # volitelné
+    LLMMessage(role=&quot;user&quot;, content=user_prompt),
+]
+
+response_text = llm.chat(
+    use_case=&quot;legal_analysis&quot;,  # nebo &quot;jurisprudence_search&quot;, případně jiný
+    messages=messages,
+    # temperature=...,  # volitelné přepsání
+    # max_tokens=...,   # volitelné přepsání
+)
+```
+
+### 6.2. Typické mapování use_case podle engine
+
+Při budoucím refactoringu jednotlivých engine modulů bych navrhl:
+
+- `engines/core_legal/engine.py`:
+  - `use_case=&quot;legal_analysis&quot;`
+- `engines/judikatura/engine.py`:
+  - `use_case=&quot;jurisprudence_search&quot;`
+- `engines/risk/engine.py`:
+  - `use_case=&quot;legal_analysis&quot;` (dokud nebude zvláštní typ, případně `risk_assessment` → mapovaný jako legal_analysis v `_get_params_for_use_case`)
+- `engines/intent/*` (pokud by se někdy LLM zapojoval):
+  - `use_case=&quot;helper&quot;` (mapovaný na helper_model; technicky ve `_get_params_for_use_case` spadne do „ostatní“ a tím do legal_analysis – případně můžeme `_get_params_for_use_case` rozšířit o explicitní větve).
+
+
+7. Unified diff – návrh změn (llm/client.py, llm/config.py)
+------------------------------------------------------------
+
+Níže uvádím **navrhovaný unified diff**. Neprovádím žádné commity; jde čistě o návrh pro vývojáře.
+
+### 7.1. Diff pro `llm/client.py`
+
+```diff
+diff --git a/llm/client.py b/llm/client.py
+index 0000000..1111111 100644
+--- a/llm/client.py
++++ b/llm/client.py
+@@ -1,14 +1,23 @@
+ # llm/client.py
+ from __future__ import annotations
+ 
+ import os
+-from dataclasses import dataclass
+-from typing import List, Optional, Literal, Any
++from dataclasses import dataclass
++from typing import Any, Dict, List, Optional, Literal
++
++from runtime.config_loader import load_yaml
++
++
++_CONFIG = load_yaml(&quot;llm/config.yaml&quot;)
+ 
+ 
+ Role = Literal[&quot;system&quot;, &quot;user&quot;, &quot;assistant&quot;]
+ 
+ 
+ @dataclass
+ class LLMMessage:
+@@ -16,6 +25,33 @@ class LLMMessage:
+     content: str
+ 
+ 
++def get_llm_params_for_use_case(use_case: str) -&gt; Dict[str, Any]:
++    &quot;&quot;&quot;
++    Vrací parametry pro volání LLM (model, temperature, max_tokens)
++    podle use_case a konfigurace v llm/config.yaml.
++
++    Pravidla:
++      - pro `jurisprudence_search` použij helper_model + helper parametry,
++      - pro ostatní use_case použij legal_analysis_model + legal_analysis parametry.
++    &quot;&quot;&quot;
++    model_defaults = _CONFIG.get(&quot;model_defaults&quot;, {})
++    temps = _CONFIG.get(&quot;temperature&quot;, {})
++    max_tokens_cfg = _CONFIG.get(&quot;max_tokens&quot;, {})
++
++    if use_case == &quot;jurisprudence_search&quot;:
++        model = model_defaults.get(&quot;helper_model&quot;, &quot;gpt-4.1-mini&quot;)
++        temperature = float(temps.get(&quot;helper&quot;, 0.1))
++        max_tokens = int(max_tokens_cfg.get(&quot;helper&quot;, 800))
++    else:
++        model = model_defaults.get(&quot;legal_analysis_model&quot;, &quot;gpt-4.1-mini&quot;)
++        temperature = float(temps.get(&quot;legal_analysis&quot;, 0.2))
++        max_tokens = int(max_tokens_cfg.get(&quot;legal_analysis&quot;, 2000))
++
++    return {
++        &quot;model&quot;: model,
++        &quot;temperature&quot;: temperature,
++        &quot;max_tokens&quot;: max_tokens,
++    }
++
++
+ class LLMClient:
+     &quot;&quot;&quot;
+     Jednotná brána k LLM.
+@@ -25,30 +61,36 @@ class LLMClient:
+ 
+     - LLM_BACKEND=mock  (default)  -&gt; žádné API volání, levné testy
+     - LLM_BACKEND=openai         -&gt; pokus o reálné volání OpenAI
+     &quot;&quot;&quot;
+ 
+     def __init__(self) -&gt; None:
+         self.backend = os.getenv(&quot;LLM_BACKEND&quot;, &quot;mock&quot;).lower()
+ 
+         # lazy import openai – aby testy nepadaly na pydantic_core atd.
+         self._openai_client = None
+         if self.backend == &quot;openai&quot;:
+             api_key = os.getenv(&quot;OPENAI_API_KEY&quot;)
+             if not api_key:
+-                # Bez klíče nemá smysl se snažit o openai režim
++                # Bez klíče nemá smysl se snažit o openai režim – degradujeme na mock
+                 self.backend = &quot;mock&quot;
+             else:
+                 try:
+                     from openai import OpenAI  # type: ignore
+ 
+                     self._openai_client = OpenAI(api_key=api_key)
+                 except Exception:
+-                    # Když selže import nebo client, spadneme zpět do mock režimu
++                    # Když selže import nebo client, spadneme zpět do mock režimu
+                     self.backend = &quot;mock&quot;
+                     self._openai_client = None
+ 
+     # --- veřejné API ---
+ 
+     def chat(
+         self,
+         use_case: str,
+         messages: List[LLMMessage],
+         temperature: Optional[float] = None,
+         max_tokens: Optional[int] = None,
+     ) -&gt; str:
+         &quot;&quot;&quot;
+         Hlavní vstupní bod pro všechny enginy.
+         V testech bude defaultně běžet mock, v produkci se zapne přes env.
+         &quot;&quot;&quot;
 -        if self.backend == &quot;openai&quot; and self._openai_client is not None:
 -            return self._chat_openai(messages, temperature, max_tokens)
 -
 -        # fallback / testovací mock
 -        return self._chat_mock(use_case, messages)
-+        # načtení defaultních parametrů z llm/config.yaml
-+        model, default_temp, default_max_tokens = _get_default_params(use_case)
++        # 1) načti defaultní parametry z YAML podle use_case
++        params = get_llm_params_for_use_case(use_case)
++        # 2) případné přepsání explicitními argumenty
++        if temperature is not None:
++            params[&quot;temperature&quot;] = float(temperature)
++        if max_tokens is not None:
++            params[&quot;max_tokens&quot;] = int(max_tokens)
 +
-+        temp = temperature if temperature is not None else default_temp
-+        max_tok = max_tokens if max_tokens is not None else default_max_tokens
-+
++        # 3) rozhodnutí backendu
 +        if self.backend == &quot;openai&quot; and self._openai_client is not None:
-+            return self._chat_openai(
-+                model=model,
-+                messages=messages,
-+                temperature=temp,
-+                max_tokens=max_tok,
-+            )
++            return self._chat_openai(messages, params)
 +
 +        # fallback / testovací mock
 +        return self._chat_mock(use_case, messages)
-@@
--    def _chat_openai(
--        self,
--        messages: List[LLMMessage],
+ 
+     # --- interní implementace backendů ---
+ 
+     def _chat_openai(
+         self,
+         messages: List[LLMMessage],
 -        temperature: Optional[float],
 -        max_tokens: Optional[int],
--    ) -&gt; str:
-+    def _chat_openai(
-+        self,
-+        model: str,
-+        messages: List[LLMMessage],
-+        temperature: Optional[float],
-+        max_tokens: Optional[int],
-+    ) -&gt; str:
-@@
++        params: Dict[str, Any],
+     ) -&gt; str:
+         &quot;&quot;&quot;
+         Reálné volání OpenAI – snažíme se držet se nové knihovny openai.
+         Ošetřené tak, aby případný pád neodstřelil celý runtime.
+         &quot;&quot;&quot;
+         try:
 -            model = os.getenv(&quot;OPENAI_MODEL&quot;, &quot;gpt-4.1-mini&quot;)
 -
              # převod do dict formátu, kterou openai klient očekává
              api_messages = [
                  {&quot;role&quot;: m.role, &quot;content&quot;: m.content} for m in messages
              ]
-@@
+ 
+             resp = self._openai_client.chat.completions.create(  # type: ignore[union-attr]
 -                model=model,
-+                model=model,
-                 messages=api_messages,
-                 temperature=temperature,
-                 max_tokens=max_tokens,
+-                messages=api_messages,
+-                temperature=temperature,
+-                max_tokens=max_tokens,
++                messages=api_messages,
++                **params,
              )
+ 
+             content = getattr(resp.choices[0].message, &quot;content&quot;, None)  # type: ignore[index]
+             return content or &quot;&quot;
+         except Exception as e:
+             # V produkci chceme radši degradovat na skeleton než spadnout
+             return f&quot;[LLM ERROR] {e}&quot;
 ```
 
-#### 6.2 `llm/config.py` – označení jako deprecated
+*(Pozn.: `index 0000000..1111111` je placeholder; skutečný hash doplní git.)*
+
+
+### 7.2. Diff pro `llm/config.py` (jen deprecace komentářem)
 
 ```diff
--# llm/client.py
--
--from __future__ import annotations
-+&quot;&quot;&quot;
-+DEPRECATED:
-+  Tento modul byl nahrazen centralizovaným klientem v llm/client.py.
-+  Nepoužívej ho v novém kódu. Bude odstraněn po migraci všech volání.
-+&quot;&quot;&quot;
+diff --git a/llm/config.py b/llm/config.py
+index 2222222..3333333 100644
+--- a/llm/config.py
++++ b/llm/config.py
+@@ -1,3 +1,17 @@
++# =============================================================================
++# DEPRECATED / LEGACY MODULE
++#
++# Tento modul (llm/config.py) je považován za **DEPRECATED**.
++# Původně obsahoval alternativního LLMClienta vázaného na llm/config.yaml.
++#
++# Nově je jediným oficiálním LLM klientem:
++#     `llm.client.LLMClient` a `llm.client.LLMMessage`
++#
++# Všechny nové enginy a kód by měly používat `llm.client`.
++# Tento modul je zde pouze z historických důvodů a může být v budoucnu odstraněn.
++# =============================================================================
 +
-+from __future__ import annotations
++
+ # llm/client.py
+ 
+ from __future__ import annotations
 ```
 
-(Není nutné dělat další změny, pokud žádný kód tento modul nepoužívá.)
+8. Shrnutí (co se mění, proč)
+-----------------------------
 
----
+1. **Konsolidace LLM klienta**:
+   - `llm/client.py` je rozšířen tak, aby:
+     - načítal konfiguraci z `llm/config.yaml` přes `runtime.config_loader.load_yaml`,
+     - měl helper `get_llm_params_for_use_case`:
+       - `use_case == &quot;jurisprudence_search&quot;` → helper_model, helper temperature/max_tokens,
+       - ostatní → legal_analysis_model, legal_analysis temperature/max_tokens,
+     - metoda `chat()`:
+       - načítá defaultní parametry z YAML,
+       - umožňuje je přepsat argumenty `temperature`, `max_tokens`,
+       - při `backend == &quot;openai&quot;` volá `_chat_openai(messages, params)`,
+       - jinak `_chat_mock(use_case, messages)`.
+     - `_chat_openai` již nečte `OPENAI_MODEL` z env, ale přijímá `params` (model, temperature, max_tokens) shora.
 
-### Krok 7: Dopad na testy a kompatibilitu
+2. **Robustní fallback**:
+   - Chování při absenci `OPENAI_API_KEY` nebo selhání importu OpenAI zůstává:
+     - backend se přepne na `mock`,
+     - aplikace nespadne.
 
-- Ze seznamu testů:
-  - `tests/test_domain_rules.py`
-  - `tests/test_judikatura_engine.py`
-  - `tests/test_runtime_pipeline.py`
-  - `tests/test_core_legal_engine.py`
-- Dosavadní `LLMClient` defaultuje na backend `&quot;mock&quot;` (není-li `LLM_BACKEND=openai` + klíč).
-  - To by mělo zachovat stávající chování testů, pokud:
-    - testy nebyly závislé na předchozím `llm/config.py` (což z dostupného výpisu nevypadá),
-    - testy nečekají konkrétní hodnotu `OPENAI_MODEL` (kterou nyní nahradí model z YAML, ale v mock režimu to stejně není relevantní).
-- Změna signatury `_chat_openai` je vnitřní; `chat(...)` API zůstává stejné.
-- Pokud by existoval test, který:
-  - explicitně importuje `llm.config.LLMClient` nebo `llm.config.LLMMessage`,
-  - nebo zkoumá `OPENAI_MODEL`,
-  → bylo by nutné:
-    - buď test upravit na nový klient (`llm.client`),
-    - nebo dočasně poskytnout kompatibilní wrapper (ale to by odporovalo snaze odstranit duplicitu).
-- Doporučení:
-  - Spustit testy po úpravách.
-  - Pokud něco selže, zapsat konkrétní důvod do reportu (např. „test X přímo importuje llm.config“), a upravit test tak, aby:
-    - používal `llm.client.LLMClient`,
-    - nevyžadoval přítomnost reálného API key (testy by měly běžet v mock režimu).
+3. **Deprecace starého klienta**:
+   - `llm/config.py` je pouze označen jako **DEPRECATED** module, bez breaking změn.
+   - Všechny nové implementace mají používat `llm.client.LLMClient`.
 
----
+4. **Další kroky pro vývojáře (mimo tento diff)**:
+   - Doanalýzovat zbytek repozitáře (engines, runtime) a sepsat:
+     - všechny importy `openai` / starých klientů,
+     - konkrétní řádky, kde se volá přímo OpenAI,
+     - pro každý navrhnout přesné nahrazení ve stylu:
 
-## 4. Nejasnosti / otevřené otázky
+       ```python
+       from llm.client import LLMClient, LLMMessage
+       llm = LLMClient()
+       messages = [...]
+       resp = llm.chat(use_case=&quot;legal_analysis&quot;, messages=messages)
+       ```
 
-1. **Skutečné použití `llm/config.py`**:
-   - Z daného výpisu není vidět, že by jej někdo importoval.
-   - Je potřeba projít celý repo (grep na `from llm.config import` / `llm.config.LLMClient`) a potvrdit, že není používán.
-2. **Granularita use_case v YAML**:
-   - Dnes jsou jen `legal_analysis` vs `helper`.
-   - Pro budoucí čistotu by bylo vhodné:
-     - buď definovat další klíče (`judikatura_search`, `risk_assessment`, `output_polish`, …),
-     - nebo formálně říct, že všechny tyto use-case patří do kategorie „helper“.
-3. **Potenciální konfigurace LLM parametrů v engine-specific YAML**:
-   - Např. `engines/core_legal/config.yaml` může obsahovat něco jako „mode: skeleton/llm, llm_use: legal_analysis“.
-   - Je potřeba zkontrolovat, zda se tam nesnaží duplikovat LLM parametry; pokud ano, navrhnout jejich odstranění ve prospěch centralizace v `llm/config.yaml`.
+   - Teprve v další fázi případně provést konkrétní refaktoring těchto volání.
 
----
+Pokud doplníte obsah zbývajících klíčových souborů (zejména engines a runtime), mohu v další iteraci doplnit:
 
-## 5. Shrnutí navržených kroků pro vývojáře
-
-1. **Oficiální klient**
-   - Potvrdit `llm/client.py` jako jediného LLM klienta.
-   - Přidat dokumentační zmínku (README/docs).
-
-2. **Konfigurace z YAML**
-   - Implementovat v `llm/client.py` funkci `_get_default_params(use_case)` využívající `llm/config.yaml`.
-   - Upravit `LLMClient.chat` a `_chat_openai` podle navrženého diffu.
-
-3. **Deprecace starého klienta**
-   - Označit `llm/config.py` jako deprecated (komentář).
-   - Projít repo a ověřit, že nikdo tento modul nepoužívá; pokud ano, přepsat importy na `llm.client`.
-
-4. **Sjednocení engine volání**
-   - Otevřít:
-     - `engines/core_legal/engine.py`
-     - `engines/judikatura/engine.py`
-     - `engines/risk/engine.py`
-     - `engines/output/*`
-   - Najít všechna LLM volání a přepsat je na `LLMClient.chat(use_case, messages, ...)` s použitím `LLMMessage`.
-   - Zajistit, aby žádný engine nepoužíval přímo `openai` ani `llm/config.py`.
-
-5. **Testy**
-   - Spustit stávající testy.
-   - Pokud některý test očekává staré chování (import z `llm.config` nebo závislost na reálném API), upravit jej:
-     - tak, aby pracoval v mock režimu,
-     - s oficiálním klientem `llm.client`.
-
-6. **Další fáze (Stage 2+) – návrh do budoucna**
-   - Rozšířit `llm/config.yaml` o explicitní sekci `use_cases:` s parametry pro jednotlivé enginy (místo dvou pevných větví).
-   - Přidat jednoduchý logger / structured logging do `LLMClient` pro lepší debugging (místo případných `print`).
-   - Připravit jednotný enum/konstanty pro use_case (např. v `llm/client.py`), aby se minimalizovaly překlepy v názvech.
+- seznam všech míst se starým LLM voláním (včetně čísel řádků),
+- konkrétní návrhy refaktoringu pro každý engine,
+- případnou rozšířenou logiku `_get_params_for_use_case` pro další `use_case` (risk, intent, helper, memory, atd.).
 ================================================================================
 </pre>
 </body>
