@@ -1,0 +1,36 @@
+domain_key: "trestni"
+label: "Trestní právo"
+
+legal_issues:
+  - "trestní odpovědnost fyzické osoby"
+  - "přečin vs. zločin"
+  - "podmíněné zastavení trestního stíhání"
+  - "odklon v trestním řízení"
+  - "odpovědnost mladistvých"
+
+risk_keywords:
+  - "trestní stíhání"
+  - "obvinění"
+  - "podezření"
+  - "skutek"
+  - "pachatel"
+  - "poškozený"
+  - "obhájce"
+  - "vazba"
+
+priority_rules:
+  - "právo na obhájce"
+  - "právo nevypovídat"
+  - "lhůty trestního řízení"
+  - "zásada in dubio pro reo"
+  - "ochrana nezletilých a mladistvých"
+
+typical_parties:
+  - "obviněný"
+  - "poškozený"
+  - "státní zástupce"
+  - "policie"
+
+notes:
+  - "Trestní právo je vysoce riziková doména – zásah do osobní svobody, tresty."
+  - "Doporučuje se včas vyhledat advokáta, zejména při obvinění nebo výslechu."

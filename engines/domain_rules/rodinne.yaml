@@ -1,0 +1,34 @@
+domain_key: "rodinne"
+label: "Rodinné právo"
+
+legal_issues:
+  - "svěření dítěte do péče"
+  - "styk rodiče s dítětem"
+  - "výživné na dítě"
+  - "pěstounská péče"
+  - "náhradní rodinná péče"
+
+risk_keywords:
+  - "nezletilé dítě"
+  - "OSPOD"
+  - "svěření do péče"
+  - "výživné"
+  - "styk s dítětem"
+  - "zákaz styku"
+  - "závažné ohrožení dítěte"
+
+priority_rules:
+  - "nejlepší zájem dítěte"
+  - "povinnost soudu zkoumat skutečný stav věci"
+  - "povinnost spolupráce s OSPOD"
+  - "vztah rodinného a trestního řízení"
+
+typical_parties:
+  - "rodič / rodiče"
+  - "nezletilé dítě"
+  - "OSPOD"
+  - "osoba blízká"
+
+notes:
+  - "Rodinné právo je citlivá doména, kde se prolínají civilní, trestní a správní prvky."
+  - "Komunikační strategie a dokumentace chování rodičů je klíčová."

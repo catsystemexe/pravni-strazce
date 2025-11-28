@@ -1,0 +1,46 @@
+{
+  "intent_id": "criminal_defense",
+  "label_cs": "Trestní obvinění",
+  "domain": "criminal_law",
+  "subdomains": [
+    "trestni_rizeni",
+    "mladistvi"
+  ],
+  "description_cs": "Situace kolem trestního obvinění – zahájení stíhání, výslechy, zásah policie, nezletilí.",
+  "risk_patterns": [
+    { "pattern": "obvinen", "dimensions": ["criminal"] },
+    { "pattern": "usnesen.*zahajeni", "dimensions": ["criminal", "procedural"] },
+    { "pattern": "vyslech", "dimensions": ["criminal", "procedural"] },
+    { "pattern": "zajisten.*telefon", "dimensions": ["criminal", "procedural"] },
+    { "pattern": "domovni.*prohlidk", "dimensions": ["criminal", "procedural"] },
+    { "pattern": "ospod", "dimensions": ["child", "authority"] },
+    { "pattern": "policie", "dimensions": ["authority"] }
+  ],
+  "basic_questions": [
+    "Kdy a jakym zpusobem ti bylo sdelene obvineni (nebo tvemu diteti)?",
+    "Mas k dispozici usneseni o zahajeni trestniho stihani nebo jine procesni listiny?",
+    "Jake dukazy ma policie k dispozici (vypovedi, zaznamy, listiny, videa)?",
+    "Probehly vyslechy, kdo byl pritomen a zda byla zajistena prava (obhajce, zakonny zastupce)?",
+    "Byly zajisteny nejake veci (telefon, pocitac, nosice dat) a na jakem pravnim zaklade?",
+    "Jde o dite nebo mladistveho a byl informovan OSPOD nebo rodice?",
+    "Dochazi k dalsim ukonum policie nebo soudu (predvolani, vyslechy, znalecke posudky)?"
+  ],
+  "safety_questions": [
+    "Jde o nezletile dite nebo mladistveho, jehoz prava mohou byt snadno porusena?",
+    "Doslo k zasahu do domovni svobody nebo k zajisteni elektroniky bez jasneho vysvetleni?",
+    "Mas uz pravnika/obhajce, nebo jsi bez odborneho zastoupeni i pres vaznost situace?"
+  ],
+  "normative_references": [
+    "trestni_rad",
+    "trestni_zakonik",
+    "zakon_o_socialne_pravnich_ochranach_deti",
+    "listina_zakladnich_prav_a_svobod"
+  ],
+  "conclusion_skeletons": {
+    "low": "Informace o povaze obvineni a postupu policie jsou nedostatecne. Je nutne ziskat zakladni listiny (usneseni, protokoly) a upresnit situaci.",
+    "medium": "Z dostupnych udaju vyplyvaji rozpory v dukazech nebo pochybnosti o primerenosti postupu organu cinnych v trestnim rizeni. Doporucuji aktivne resit obhajobu a dokumentovat vsechny kroky.",
+    "high": "Existuji vazne indicie procesnich pochybeni nebo zasahu do prav (zvlast u deti/mladistvych). Doporucuji okamzite zajistit pravni zastoupeni a pripravit strukturovanou obrannou strategii."
+  },
+  "notes": "Klicovy intent pro child-protection layer a prisnejsi bezpecnostni logiku.",
+  "version": "1.0.0"
+}

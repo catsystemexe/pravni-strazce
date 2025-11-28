@@ -1,0 +1,44 @@
+{
+  "intent_id": "labor_termination",
+  "label_cs": "Výpověď z pracovního poměru",
+  "domain": "labor_law",
+  "subdomains": [
+    "vypoved",
+    "okamzite_zruseni"
+  ],
+  "description_cs": "Řešení výpovědi, okamžitého zrušení pracovního poměru, neplatnosti rozvázání, nároků zaměstnance.",
+  "risk_patterns": [
+    { "pattern": "vypoved", "dimensions": ["procedural", "financial"] },
+    { "pattern": "okamzit", "dimensions": ["procedural"] },
+    { "pattern": "pracovni.*uraz", "dimensions": ["financial"] },
+    { "pattern": "sikana", "dimensions": [] },
+    { "pattern": "neplatn.*rozvazani", "dimensions": ["procedural"] },
+    { "pattern": "mzd.*dluhy", "dimensions": ["financial"] }
+  ],
+  "basic_questions": [
+    "O jaky typ rozvazani pracovniho pomeru jde (vypoved, okamzite zruseni, dohoda)?",
+    "Kdy byla vypoved nebo jiny ukon dorucen?",
+    "Jaky duvod zamestnavatel v listine uvedl?",
+    "Jak dlouho trval pracovni pomer a jaka byla tvoje pracovni pozice?",
+    "Predchazela vypovedi nejaka pisemna upozorneni nebo vytky?",
+    "Jake dokumenty mas k dispozici (smlouva, vypoved, emaily, zaznamy)?",
+    "Mas neuhradne mzdy, nahrady nebo jine naroky vuci zamestnavateli?"
+  ],
+  "safety_questions": [
+    "Bezi dvoumesicni lhuta pro podani zaloby na neplatnost rozvazani pracovniho pomeru?",
+    "Znamenala vypoved okamzitou ztratu prijmu bez nahrady?",
+    "Nachazis se v ochrannem obdobi (napr. tehotenstvi, rodicovska, nemoc)?"
+  ],
+  "normative_references": [
+    "zakonik_prace",
+    "obcansky_zakonik",
+    "zakon_o_inspekci_prace"
+  ],
+  "conclusion_skeletons": {
+    "low": "Z dostupnych informaci nelze posoudit, zda byla vypoved nebo jiny ukon platny. Je nutne doplnit listiny a casovou osu.",
+    "medium": "Uvedeny duvod se jevi jako sporny nebo nedostatecne odduvodneny. Doporucuji shromazdit dukazy a zvazit podani namitek nebo zaloby na neplatnost.",
+    "high": "Na zaklade dostupnych udaju existuje vysoka pravdepodobnost neplatnosti rozvazani pracovniho pomeru. Doporucuji bezodkladne kontaktovat odbornou pomoc a podat zalobu ve lhute."
+  },
+  "notes": "Pro urgentni vypovedi bude vhodny specialni flow se silnym durazem na dvoumesicni lhutu.",
+  "version": "1.0.0"
+}

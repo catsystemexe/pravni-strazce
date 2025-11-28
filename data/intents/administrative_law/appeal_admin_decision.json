@@ -1,0 +1,42 @@
+{
+  "intent_id": "appeal_admin_decision",
+  "label_cs": "Odvolání proti rozhodnutí úřadu",
+  "domain": "administrative_law",
+  "subdomains": [
+    "spravni_rizeni",
+    "odvolani_spravni"
+  ],
+  "description_cs": "Odvolání proti rozhodnutí správního orgánu – lhůty, doručení, procesní vady.",
+  "risk_patterns": [
+    { "pattern": "rozhodnut", "dimensions": ["procedural", "authority"] },
+    { "pattern": "odvolan", "dimensions": ["procedural"] },
+    { "pattern": "lhuta", "dimensions": ["procedural"] },
+    { "pattern": "dorucen", "dimensions": ["procedural"] },
+    { "pattern": "vyzva.*doplnit", "dimensions": ["procedural", "authority"] },
+    { "pattern": "zamitnut", "dimensions": ["procedural"] }
+  ],
+  "basic_questions": [
+    "Kdy ti bylo rozhodnuti doruceno (datum prevzeti nebo fikce doruceni)?",
+    "Je ve vyroku nebo pouceni uvedena lhuta pro odvolani a v jake delce?",
+    "Jake konkretni vyhrady mas vuci vyroku a odduvodneni rozhodnuti?",
+    "Jake dokumenty mas k dispozici (rozhodnuti, spisove listiny, korespondenci)?",
+    "Postupoval podle tebe urad podle spravniho radu (vyzvy, dokazovani, pouceni)?",
+    "Jak vypada casova osa rizeni – kdy bylo zahajeno, jaka byla jednani a vyzvy?"
+  ],
+  "safety_questions": [
+    "Bezi stale odvolaci lhuta, nebo uz uplynula?",
+    "Jde rozhodnuti primo proti tvym majetkovym nebo osobnim pravum?",
+    "Obsahuje rozhodnuti vyzvu k nejakemu konkretnimu ukonu (platba, odstraneni stavby, povinnost podle lhuty)?"
+  ],
+  "normative_references": [
+    "spravni_rad",
+    "zakon_o_odpovednosti_za_prestupky"
+  ],
+  "conclusion_skeletons": {
+    "low": "Neni k dispozici dost informaci o obsahu a doruceni rozhodnuti. Bez techto udaju nelze navrhnout konkretni argumentaci.",
+    "medium": "Je pravdepodobne, ze rozhodnuti trpi procesnimi vadami nebo nedostatecnym odduvodnenim. Doporucuji pripravit strukturovane odvolani a navrhnout doplneni dokazovani.",
+    "high": "Z informaci vyplyvaji vazne pochybnosti o zakonitosti nebo spravedlnosti rozhodnuti. Doporucuji podat detailni odvolani a zvazit i navrh na prezkum nebo dalsi opravne prostredky."
+  },
+  "notes": "Jádro budoucího odvolacího/přezkumného enginu – vhodné napojení na šablony odvolání.",
+  "version": "1.0.0"
+}

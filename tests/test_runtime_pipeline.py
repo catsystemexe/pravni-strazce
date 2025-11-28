@@ -18,6 +18,7 @@ def test_run_pipeline_returns_expected_structure():
     assert "final_answer" in res
     assert "core_legal" in res
     assert "risk" in res
+    assert "judikatura" in res
 
     assert isinstance(res["final_answer"], str)
 
@@ -30,7 +31,7 @@ def test_final_answer_contains_main_sections():
     assert "## ⚖️ Právní analýza" in text
     assert "## 📚 Judikatura" in text
     assert "## ⚠️ Rizika a naléhavost" in text
-    assert "## 🧭 Doporučený další postup" in text or "## 🧭 Doporučený další postup" in text
+    assert "## 🧭 Doporučený další postup" in text
 
 
 def test_final_answer_includes_risk_level():

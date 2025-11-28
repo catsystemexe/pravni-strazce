@@ -1,0 +1,35 @@
+domain_key: "civil"
+label: "Občanské právo"
+
+legal_issues:
+  - "náhrada škody"
+  - "smluvní závazky a porušení smlouvy"
+  - "bezdůvodné obohacení"
+  - "ochrana osobnosti"
+  - "vlastnické právo a sousedské spory"
+  - "vydání bezdůvodného obohacení"
+
+risk_keywords:
+  - "lhůta"
+  - "žaloba"
+  - "odvolání"
+  - "rozsudek"
+  - "vykonatelnost"
+  - "exekuce"
+  - "promlčení"
+
+priority_rules:
+  - "lhůty pro podání žaloby a odvolání"
+  - "důkazní břemeno a povinnost tvrzení"
+  - "předběžná opatření"
+  - "náhrada nákladů řízení"
+
+typical_parties:
+  - "fyzické osoby"
+  - "spoluvlastníci"
+  - "sousedé"
+  - "spotřebitel vs. podnikatel"
+
+notes:
+  - "Občanské právo je defaultní doména pro většinu soukromoprávních sporů."
+  - "Vysoký význam mají lhůty a promlčení nároků."

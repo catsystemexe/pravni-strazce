@@ -1,0 +1,34 @@
+domain_key: "spravni"
+label: "Správní právo"
+
+legal_issues:
+  - "správní delikt"
+  - "přestupek"
+  - "správní řízení před správním orgánem"
+  - "odvolání proti rozhodnutí správního orgánu"
+  - "správní žaloba ke správnímu soudu"
+
+risk_keywords:
+  - "správní řízení"
+  - "přestupek"
+  - "rozhodnutí správního orgánu"
+  - "odvolání"
+  - "správní žaloba"
+  - "lhůta 15 dnů"
+  - "lhůta 30 dnů"
+
+priority_rules:
+  - "procesní pravidla správního řízení"
+  - "lhůty pro odvolání a žaloby"
+  - "vyčerpání řádných opravných prostředků"
+  - "soudní přezkum správního rozhodnutí"
+
+typical_parties:
+  - "správní orgán"
+  - "účastník řízení"
+  - "obec / město / kraj"
+  - "orgány státní správy"
+
+notes:
+  - "Ve správním právu jsou klíčové lhůty pro podání odvolání a žaloby."
+  - "Nečinnost správních orgánů může být samostatným důvodem zásahu soudu."

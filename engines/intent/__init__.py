@@ -1,0 +1,1 @@
+from .engine import run  # jednoduchý re-export, pro případné budoucí použití
