@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Právní strážce – poslední report agenta</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 2rem;
+            line-height: 1.5;
+            background: #0f172a;
+            color: #e5e7eb;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background: #020617;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            border: 1px solid #1f2937;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .meta {
+            font-size: 0.85rem;
+            color: #9ca3af;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Právní strážce – poslední report agenta</h1>
+    <div class="meta">Tento soubor generuje GitHub Action z repozitáře catsystemexe/pravni-strazce.</div>
+    <pre>================================================================================
+ODPOVĚĎ CODING AGENTA:
+
+## 1. Co vyplývá ze struktury projektu
+
+- **Celkové pojetí**
+  - Jádro je navrženo jako **pipeline orchestrátor** (`runtime/orchestrator.py`), který skládá výstup z více specializovaných enginů.
+  - Framework je ve stavu **Skeleton v0**, už průchozí, s testy, ale s omezenou doménovou logikou.
+
+- **Engines (moduly)**
+  - `engines/core_legal` – hlavní právní analýza (IRAC), má vlastní prompty a config.
+  - `engines/intent` – heuristický intent/domain engine; aktuálně:
+    - tvrdě zakódované klíčové výrazy v kódu,
+    - domény: `civil`, `criminal`, `family`, `administrative`, `school`, `inheritance`,
+    - intenty: `general`, `document_check`, `complaint`, `inheritance`, `school_dispute`, `criminal_defense`, `info`.
+    - zároveň existuje **LLM prompt** pro intent (`prompts/intent_classification.md`), ale engine ho zatím nepoužívá.
+  - `engines/domain_rules` – YAML konfigurace pravidel pro velké právní oblasti:
+    - `civil.yaml`, `trestni.yaml`, `spravni.yaml`, `zdravotnicke.yaml`, `skolske.yaml`, `spotrebitel.yaml`, `notarske.yaml`, `rodinne.yaml`.
+    - To tvoří jakýsi **doménový katalog** pravidel, ale zatím ho zřejmě plně nevyužívá intent engine ani core_legal.
+  - `engines/judikatura` – zatím skeleton s prompty, připravené napojení na zdroj judikatury.
+  - `engines/risk`, `engines/safety`, `engines/output`, `engines/memory` – podpůrné vrstvy (risk scoring, PII guard, styl výstupu, paměť).
+
+- **LLM vrstva**
+  - Existují **dva klienti**:
+    - `llm/client.py` – mock/openai klient s přepínáním přes env, robustní vůči chybějícímu klíči.
+    - `llm/config.py` – druhý klient, který **vyžaduje** `OPENAI_API_KEY` a čte `llm/config.yaml`.
+  - Konfigurace modelů, teplot a max_tokens je v `llm/config.yaml`.
+  - Pro jednotlivé engines jsou připravené prompty (`engines/core_legal/prompts/*`, `engines/judikatura/prompts/*`, `engines/intent/prompts/*`, `prompts/policy/*`).
+
+- **Data a znalostní vrstva**
+  - `data/schema/domains.json` – JSON schema pro definici domén (pravděpodobně pro doménový katalog).
+  - `data/intents/…` – několik JSON souborů s jednotlivými intenty (např. `labor_termination`, `consumer_credit`, `traffic_speed_offence`, `appeal_admin_decision`, `criminal_defense`):
+    - Struktura je zjevně připravena pro **bohatší intent slovníky / scénáře**.
+  - `knowledge/legal_dictionary.md` – výkladový slovník pojmů (zatím 1 soubor).
+
+- **Runtime / produkt**
+  - `runtime/orchestrator.py`, `runtime/context.py`, `runtime/domain_catalog.py`, `runtime/legal_sources.py` – orchestrují tok dat, načítají pravidla, budují CaseContext.
+  - `product/e_advokat_pro/*` – produktová konfigurace (feature flagy, licensing, risk politika).
+  - `packs/*` – tematické balíčky (family, civil, common), pravděpodobně pro modulární zapínání domén.
+
+- **Šablony výstupů**
+  - `templates/answers/legal_answer_with_judikatura.md` – šablona pro odpověď.
+  - `templates/documents/*` – šablony pro generování dokumentů (ultra_clean_export, ultra_legal_document).
+
+- **Nástroje a testy**
+  - `tools/validate_data.py`, `tools/apply_policy.py` – helpery pro validaci dat/configů.
+  - `tests/*` – základní testy pro domain_rules loader, judikatura engine, runtime pipeline a core_legal engine.
+
+---
+
+## 2. Co není (zcela) jasné / co chybí k ucelenému obrazu
+
+1. **Formát `data/intents/*` JSON**
+   - Chybí ukázka obsahu (v dotazu byl uveden jen název souborů).
+   - Není jasné:
+     - zda jsou to čistě **deskriptivní definice** intentů (název, popis, klíčová slova, sloty),
+     - nebo již obsahují i **prompt templaty / scénáře** (jak má engine reagovat).
+   - Není vidět, jak tyto soubory používá `engines/intent.engine` (aktuálně heuristiky jsou hard‑coded).
+
+2. **Struktura `data/schema/domains.json`**
+   - Nevíme, jak jsou domény popsány (id, label, parent, synonyms?), a jak se má tento soubor vztahovat k:
+     - `engines/domain_rules/*.yaml`,
+     - `runtime/domain_catalog.py`,
+     - a k doménám používaným v core_legal a intent engine.
+
+3. **Obsah `engines/domain_rules/*.yaml`**
+   - V dotazu jsou uvedeny pouze názvy souborů, ne jejich struktura.
+   - Není jasné:
+     - zda definují jen **tagy a základní pravidla**, nebo i **pod‑domény, typické spory, intenty**,
+     - jak jsou tyto soubory **mapovány do doménového katalogu** a do výběru šablon/analýzy.
+
+4. **`runtime/domain_catalog.py`**
+   - Nejsou ukázány detaily, jak runtime staví katalog domén.
+   - Není zřejmé, zda:
+     - používá `data/schema/domains.json`,
+     - nebo `engines/domain_rules/*.yaml`,
+     - nebo obojí (a jak je páruje).
+
+5. **Dvojí LLM klient (`llm/client.py` vs. `llm/config.py`)**
+   - Potřebujeme vyjasnit, který je „oficiální“ a který je historický/experimentální.
+
+---
+
+## 3. Návrh konkrétních kroků
+
+### 3.1 Architektura LLM vrstvy
+
+1. **Rozhodnout o jediném LLM klientovi**
+   - Cíl: odstranit dvojkolejnost (`llm/client.py` vs. `llm/config.py`).
+   - Doporučení:
+     - Zachovat **`llm/client.py`** jako _hlavní_ klient:
+       - umí mock/openai,
+       - je robustní vůči chybějícímu klíči,
+       - používá env proměnné a je lépe zapojen do testů.
+     - `llm/config.py`:
+       - buď přejmenovat na `llm/legacy_client.py` a označit v docu jako deprecated,
+       - nebo jeho logiku (čtení `config.yaml`) přesunout do `llm/client.py` jako konfigurační vrstvu.
+   - Pro vývojáře:
+     - [ ] V dokumentaci (`README` nebo `docs/architecture_llm.md`) jasně popsat:
+       - jak se **přepíná backend** (`LLM_BACKEND=mock|openai`),
+       - jak se **řídí model/teplota/max_tokens** (env vs. `config.yaml`),
+       - jaké **use_case** hodnoty mají jednotlivé enginy používat (např. `legal_analysis`, `intent_classification`, `jurisprudence_search`).
+
+2. **Standardizovat rozhraní pro enginy**
+   - Definovat v `llm/client.py`:
+     - seznam povolených `use_case` (ideálně jako `Literal` nebo Enum),
+     - mapování `use_case -&gt; model/temperature/max_tokens` (převzít z `llm/config.yaml`).
+   - Výstupní API: všechny enginy musí používat **stejnou třídu LLMClient** s metodou `chat(use_case, messages, ...)`.
+
+---
+
+### 3.2 Domény a doménový katalog
+
+3. **Vyjasnit a sepsat „master“ doménový model**
+   - Vytvořit dokument např. `docs/domain_model.md`:
+     - popis hlavních domén (civil, family, criminal, administrative, labour, school, health, consumer, inheritance, etc.),
+     - pro každou:
+       - `id` (strojový),
+       - `label_cs` (uživatelský),
+       - **překlopení na engines/domain_rules** – který YAML odpovídá jaké doméně,
+       - **mapování na intent domény** (např. `administrative -&gt; spravni.yaml`),
+       - případné **subdomény** (např. `family: rozvod, výživné, péče o dítě`).
+   - Tento dokument by měl vzniknout na základě:
+     - `data/schema/domains.json`,
+     - `engines/domain_rules/*.yaml`,
+     - reálných produktových potřeb (`product/e_advokat_pro`).
+
+4. **Zjednotit názvy domén napříč vrstvami**
+   - Úkol:
+     - sladit termíny:
+       - YAML soubory: `trestni.yaml`, `civil.yaml`, `spravni.yaml`, `rodinne.yaml`, `skolske.yaml`, `spotrebitel.yaml`, `zdravotnicke.yaml`, `notarske.yaml`,
+       - intent engine: `civil`, `criminal`, `administrative`, `school`, `family`, `inheritance`, `labour`, `other`,
+       - core_legal (pokud používá `domain_classification`).
+   - Konkrétní kroky:
+     - [ ] V `data/schema/domains.json` zavést **canonical id** (např. `criminal_law`), a tam definovat:
+       - `aliasy` (např. „trestní právo“, „trestni“, `criminal`),
+       - vazbu na `engines/domain_rules/trestni.yaml`.
+     - [ ] V `engines/intent/engine.py` nahradit „volné stringy“ za **konstanty** nebo načítání z doménového katalogu (viz níže).
+
+5. **Napojit `runtime/domain_catalog.py` na `engines/domain_rules` a `data/schema/domains.json`**
+   - Cíl: vytvořit **jedno místo**, kde:
+     - je seznam domén,
+     - je cesta k příslušným YAML pravidlům,
+     - jsou definovány aliasy a meta-informace (typická agenda, podporované intenty, odkazy na znalostní zdroje).
+   - Návrh:
+     - `domain_catalog.py`:
+       - načte `data/schema/domains.json`,
+       - pro každou položku doplní:
+         - `rules_config: engines/domain_rules/&lt;id&gt;.yaml` (pokud existuje),
+         - `packs` (např. `[&quot;civil&quot;, &quot;family&quot;]`),
+         - `supported_intents` (např. `[&quot;complaint&quot;, &quot;document_check&quot;, &quot;info&quot;]`).
+
+---
+
+### 3.3 Intent engine a intent slovníky
+
+6. **Oddělit heuristiku od dat – „intent lexicon“**
+   - Současná situace:
+     - `engines/intent/engine.py` má natvrdo zadrátované klíčové výrazy.
+   - Doporučení:
+     - vytvořit v `data/intents/*` **standardní strukturu** pro definice intentů, např.:
+
+       ```json
+       {
+         &quot;id&quot;: &quot;traffic_speed_offence&quot;,
+         &quot;domain&quot;: &quot;administrative&quot;,
+         &quot;intent_group&quot;: &quot;complaint&quot;,
+         &quot;labels&quot;: {
+           &quot;cs&quot;: &quot;Přestupek za rychlost&quot;
+         },
+         &quot;keywords&quot;: [&quot;rychlost&quot;, &quot;přestupek&quot;, &quot;radar&quot;, &quot;bloková pokuta&quot;],
+         &quot;negative_keywords&quot;: [&quot;dědictví&quot;],
+         &quot;examples&quot;: [
+           &quot;Dostal jsem pokutu za překročení rychlosti, jak se mohu bránit?&quot;
+         ]
+       }
+       ```
+
+     - `engines/intent/engine.py` by:
+       - načítal takové JSON soubory přes helper (např. `runtime/domain_catalog` nebo vlastní loader),
+       - **neobsahoval hard‑coded seznam klíčových slov**, ale pracoval s daty.
+   - Kroky:
+     - [ ] Zkontrolovat obsah existujících JSON (`labor_termination.json`, `consumer_credit.json`, atd.) a sjednotit jejich strukturu (pokud se liší).
+     - [ ] Vytvořit `data/intents/README.md` s popisem povinných polí (schema).
+
+7. **Připravit dvouvrstvý Intent Engine**
+   - Cíl: mít **kombinovaný režim**:
+     - LVL 1: **heuristika/dictionary** (levná, rychlá, deterministická),
+     - LVL 2: **LLM dopřesnění** (volitelně podle `confidence` a produktové konfigurace).
+   - Konkrétní návrh:
+     - v `engines/intent/engine.py`:
+       - zachovat rychlou heuristiku (ale založenou na datech z JSON),
+       - pokud `confidence &lt; X` (např. 0.5) a LLM povoleno:
+         - zavolat LLM s promptem `engines/intent/prompts/intent_classification.md`,
+         - nechat si vrátit JSON se strukturou:
+           - `intent`, `domain`, `confidence`, `reasoning`, `keywords`, `questions_for_user`.
+     - pro orchestrátor:
+       - payload intent enginu by mohl mít 2 části:
+         ```json
+         {
+           &quot;heuristic&quot;: {...},
+           &quot;llm&quot;: {...},   // pokud použito
+           &quot;final&quot;: {...}  // vybraný výsledek (podle vyšší confidence / politiky)
+         }
+         ```
+   - Dokumentace:
+     - [ ] V `docs/intent_engine.md` popsat:
+       - jak funguje heuristika,
+       - kdy se spouští LLM,
+       - jaký je output formát.
+
+8. **Mapování intentů na šablony a analýzu**
+   - Cíl: podle konkrétního intentu umět:
+     - vybrat vhodnou **šablonu odpovědi** (např. jiný důraz u `document_check` vs. `complaint`),
+     - nastavit **stupnici rizika** nebo doporučený další krok.
+   - Kroky:
+     - [ ] V `templates/answers` zavedou další šablony (např. `legal_answer_complaint.md`, `legal_answer_document_check.md`) nebo v existující šabloně parametry typu:
+       - `{{ intent_type }}`, `{{ domain }}`, `{{ risk_level }}`, `{{ has_judikatura }}`.
+     - [ ] V `runtime/orchestrator.py` podle `intent` a `domain` rozhodnout, jakou šablonu používat:
+       - základní mapování může být v YAML (např. `packs/common/blueprints.yaml` nebo nový `config`).
+
+---
+
+### 3.4 Doménová pravidla (`engines/domain_rules`)
+
+9. **Standardizovat strukturu `*.yaml` v domain_rules**
+   - Nejprve je potřeba:
+     - [ ] Projít konkrétní YAML (např. `civil.yaml`) a zjistit, jaká pole obsahují.
+   - Typická cílová struktura:
+     ```yaml
+     id: civil
+     label_cs: Občanské právo
+     description_cs: &gt;
+       Spory mezi soukromými osobami, smlouvy, náhrada škody...
+     keywords:
+       - smlouva
+       - náhrada škody
+     typical_intents:
+       - complaint
+       - document_check
+     subdomains:
+       - id: contracts
+         label_cs: Smlouvy
+         keywords: [&quot;smlouva&quot;, &quot;dohoda&quot;]
+       - id: damages
+         label_cs: Náhrada škody
+         keywords: [&quot;náhrada škody&quot;, &quot;odpovědnost&quot;]
+     ```
+   - Následně:
+     - [ ] Dopsat do `engines/domain_rules/loader.py` validaci struktury a mapping do interního datového typu (např. `DomainRuleConfig` dataclass).
+     - [ ] Napsat testy v `tests/test_domain_rules.py` pro novou strukturu.
+
+10. **Napojení domain_rules na core_legal a intent**
+    - `core_legal` engine může:
+      - podle `domain` načíst příslušná **pravidla / checklisty** (např. pro rodinné právo: vždy se ptát na soudní rozhodnutí, OSPOD, atd.).
+      - Pomocí `rules.md` promptu u core_legal a YAML dat vložit do LLM relevantní stručný výcuc práva (high-level, ne judikaturu).
+    - `intent` engine:
+      - může použít `keywords` a `subdomains` z domain_rules pro přesnější přiřazení domény, zejména u nových typů sporů.
+
+---
+
+### 3.5 Dokumentace a vývojářský workflow
+
+11. **Doplnit high-level dokumentaci**
+    - V adresáři `docs/` navrhuji doplnit:
+      - `docs/architecture_overview.md` – shrnutí modulů, pipeline, jak spolu souvisí:
+        - API vrstva → orchestrátor → engines → templates.
+      - `docs/domains_and_intents.md` – jednotný přehled domén a intentů, vazba na YAML/JSON soubory.
+      - `docs/llm_usage.md` – jak enginy používají LLM, jaký prompt kam patří.
+
+12. **Popis datových schémat**
+    - Vytvořit stručné JSON/YAML schemata (minimálně slovně v Markdown):
+      - pro `data/intents/*` (jaký je povinný tvar),
+      - pro `data/schema/domains.json`,
+      - pro `engines/domain_rules/*.yaml`.
+    - To umožní:
+      - psát validátory (`tools/validate_data.py`),
+      - psát testy, které hlídají konzistenci.
+
+13. **Ujasnit produktové konfigurace**
+    - `product/e_advokat_pro`:
+      - v `product.yaml` případně přidat:
+        - seznam **aktivních domén**,
+        - zda je povolen LLM pro:
+          - intent engine,
+          - core_legal,
+          - judikaturu.
+      - `risk_policy.yaml`:
+        - jak se mapují intent/domain na defaultní risk level,
+        - to využije `engines/risk`.
+
+---
+
+## 4. Shrnutí prioritizovaných kroků (MVP roadmap)
+
+1. **Vyjasnit LLM klienta a zdokumentovat jeho použití.**
+2. **Zharmonizovat domény:**
+   - projít `data/schema/domains.json`, `engines/domain_rules/*.yaml`, `intent` a sepsat jednotný seznam domén + aliasů.
+3. **Zadat a sjednotit formát `data/intents/*` a začít z něj čerpat v `engines/intent/engine.py` místo hard‑codovaných seznamů.**
+4. **Zavést kombinovaný intent engine (heuristika + LLM), navázaný na existující prompt `intent_classification.md`.**
+5. **Standardizovat strukturu `engines/domain_rules/*.yaml` a napojit je na domain_catalog a core_legal.**
+6. **Rozšířit šablony odpovědí tak, aby uměly pracovat s `intent` a `domain`, a orchestrátor je podle toho volil.**
+7. **Doplnit dokumentaci v `docs/` (architektura, domains &amp; intents, LLM usage, datová schémata).**
+
+Pokud mi doplníš:
+- ukázku jednoho `data/intents/*.json`,
+- obsah jednoho typického `engines/domain_rules/*.yaml`,
+- obsah `data/schema/domains.json`,
+
+mohu navrhnout přesná schemata (JSONSchema/YAML) a konkrétní refaktoring kódu v `intent` enginu a `domain_catalog`.
+================================================================================
+</pre>
+</body>
+</html>
