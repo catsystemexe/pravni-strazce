@@ -97,7 +97,7 @@ def validate_file(path: Path, domain_from_dir: str) -> Tuple[List[str], str | No
 
     for fld in ["notes", "version", "intent_group"]:
         if fld in data:
-            expect_type(fld, str, allow_none=False)
+            expect_type(fld, str)
 
     if "examples" in data:
         expect_type("examples", list)
@@ -133,14 +133,13 @@ def validate_file(path: Path, domain_from_dir: str) -> Tuple[List[str], str | No
     if isinstance(intent_id, str):
         if not intent_id.strip():
             errors.append(f"{path}: intent_id is empty")
-        # jednoduché doporučení – můžeš změnit/zakomentovat
         if not intent_id.startswith(domain_from_dir + "_"):
             errors.append(
                 f"{path}: intent_id '{intent_id}' should start with "
                 f"domain prefix '{domain_from_dir}_' (recommendation)"
             )
 
-    # 6) lehká sanity pro conclusion_skeletons – aspoň nějaký klíč
+    # 6) conclusion_skeletons nesmí být prázdný
     concl = data.get("conclusion_skeletons") or {}
     if isinstance(concl, dict) and not concl:
         errors.append(f"{path}: conclusion_skeletons is empty dict")
@@ -159,6 +158,7 @@ def main() -> int:
     for domain_dir in sorted(RUNTIME_DIR.iterdir()):
         if not domain_dir.is_dir():
             continue
+
         domain_name = domain_dir.name
 
         for json_path in sorted(domain_dir.glob("*.json")):
@@ -169,13 +169,14 @@ def main() -> int:
                 if intent_id in seen_intent_ids:
                     prev = seen_intent_ids[intent_id]
                     all_errors.append(
-                        f"Duplicate intent_id '{intent_id}' in "
-                        f"{json_path} and {prev}"
+                        f"Duplicate intent_id '{intent_id}' in {json_path} and {prev}"
                     )
                 else:
                     seen_intent_ids[intent_id] = json_path
 
-    if all_errors:
+    # --------------------------------------------
+    # VÝSLEDKY
+    # --------------------------------------------
     if all_errors:
         print("========================================")
         print("RUNTIME INTENTS VALIDATION – ERRORS FOUND")
@@ -189,11 +190,9 @@ def main() -> int:
     print("========================================")
     print("RUNTIME INTENTS VALIDATION – OK")
     print("========================================")
-    print(f"Checked {len(seen_intent_ids)} intents in {RUNTIME_DIR}")
+    print(f"Checked {len(seen_intent_ids)} intents in: {RUNTIME_DIR}")
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
-    
-        
