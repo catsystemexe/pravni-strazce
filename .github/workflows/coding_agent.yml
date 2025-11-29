@@ -6,7 +6,7 @@ on:
       task:
         description: "Úkol pro coding agenta (česky)"
         required: true
-        default: "Analyzuj strukturu repozitáře Právní strážce a navrhni další kroky."
+        default: "Úkol:"
 
 permissions:
   contents: write   # aby mohl commitovat změny
