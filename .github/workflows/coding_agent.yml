@@ -1,48 +1,6 @@
-name: Coding agent – Právní strážce
-
-on:
-  workflow_dispatch:
-    inputs:
-      mode:
-        description: "Režim běhu: analysis / fix / check"
-        required: true
-        default: "analysis"
-      task:
-        description: "Úkol pro coding agenta (česky)"
-        required: true
-        default: ""
-
-permissions:
-  contents: write   # aby mohl commitovat změny
-
-jobs:
-  run-agent:
-    runs-on: ubuntu-latest
-
-    env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # kvůli push zpět na stejnou větev
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-
-      - name: Run coding agent and save raw text report
-        run: |
-          mkdir -p tmp
-          python coding_agent.py "${{ inputs.task }}" > tmp/last_report.txt
-
       - name: Wrap report into HTML for GitHub Pages (global + per-type logs)
+        env:
+          RUN_MODE: ${{ inputs.mode }}
         run: |
           mkdir -p docs
           python - << 'EOF'
@@ -50,34 +8,44 @@ jobs:
           import html
           from datetime import datetime
           from zoneinfo import ZoneInfo
+          import os
 
           raw_path = Path("tmp/last_report.txt")
           text = raw_path.read_text(encoding="utf-8")
 
-          # --- detekce run typu a timestampu z prvních řádků ---
-          run_type = "GENERIC"
-          timestamp = "unknown"
-
-          for line in text.splitlines():
-              if line.startswith("Run type :"):
-                  run_type = line.split(":", 1)[1].strip()
-              elif line.startswith("Timestamp (UTC) :"):
-                  timestamp = line.split(":", 1)[1].strip()
-
-          # slug pro adresář: analysis / fix / check / generic
-          slug = run_type.lower().replace(" ", "_")
-          if slug == "":
+          # --- primární zdroj: workflow input RUN_MODE ---
+          mode = os.environ.get("RUN_MODE", "").strip().lower()
+          if mode in ("analysis", "fix", "check"):
+              slug = mode
+              run_type = mode.upper()
+          else:
               slug = "generic"
+              run_type = "GENERIC"
+
+          # --- sekundární fallback z textu (pokud bys někdy chtěl) ---
+          if run_type == "GENERIC":
+              for line in text.splitlines():
+                  if line.startswith("Run type :"):
+                      rt = line.split(":", 1)[1].strip()
+                      if rt:
+                          run_type = rt
+                          slug = rt.lower().replace(" ", "_")
+                      break
 
           # CET timestamp pro název souboru: YYYY-MM-DD_HHMMCET
           cet = ZoneInfo("Europe/Prague")
           dt = datetime.now(cet)
           ts_safe = dt.strftime("%Y-%m-%d_%H%M") + "CET"
 
-          # HTML tělo
+          # Zkus z textu vytáhnout "Timestamp (UTC)" jen pro zobrazení v HTML
+          timestamp = "unknown"
+          for line in text.splitlines():
+              if line.startswith("Timestamp (UTC) :"):
+                  timestamp = line.split(":", 1)[1].strip()
+                  break
+
           body = f"<pre>{html.escape(text)}</pre>"
 
-          # Globální "last_report"
           html_doc_global = f"""<!DOCTYPE html>
           <html lang="cs">
           <head>
@@ -122,7 +90,6 @@ jobs:
           </html>
           """
 
-          # Per-type HTML (analysis/fix/check/...)
           html_doc_typed = f"""<!DOCTYPE html>
           <html lang="cs">
           <head>
@@ -171,22 +138,13 @@ jobs:
           docs_dir = Path("docs")
           docs_dir.mkdir(parents=True, exist_ok=True)
 
-          # 1) Globální poslední report
+          # Globální last_report
           (docs_dir / "last_report.html").write_text(html_doc_global, encoding="utf-8")
 
-          # 2) Per-type logy: docs/analysis/, docs/fix/, docs/check/, ...
+          # Per-type: docs/analysis/, docs/fix/, docs/check/, ...
           type_dir = docs_dir / slug
           type_dir.mkdir(parents=True, exist_ok=True)
 
-          # timestampovaný soubor + latest.html
           (type_dir / f"{ts_safe}.html").write_text(html_doc_typed, encoding="utf-8")
           (type_dir / "latest.html").write_text(html_doc_typed, encoding="utf-8")
           EOF
-
-      - name: Commit and push HTML reports
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/last_report.html docs/*/*.html
-          git commit -m "Update agent HTML reports" || echo "No changes to commit"
-          git push
