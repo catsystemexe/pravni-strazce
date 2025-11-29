@@ -185,8 +185,12 @@ jobs:
           # runtime intenty pro traffic_law – jen pokud opravdu existují
           if [ -d "data/intents/traffic_law" ]; then
           if ls data/intents/traffic_law/*.json >/dev/null 2>&1; then
-              git add data/intents/traffic_law/*.json
-            fi
+              
+          if ls data/intents/traffic_law/*.json 1> /dev/null 2>&1; then
+          git add data/intents/traffic_law/*.json 
+          else
+          echo "No generated traffic_law intents to add (directory or files not found)."
+            fi   
           fi
 
           git commit -m "Update agent HTML reports and traffic_law intents" || echo "No changes to commit"
