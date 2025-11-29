@@ -174,28 +174,25 @@ jobs:
           (type_dir / "latest.html").write_text(html_doc_typed, encoding="utf-8")
           EOF
 
-
       - name: Commit and push HTML reports + generated intents
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # HTML reporty (vždy)
+          # HTML reporty
           git add docs/last_report.html docs/*/*.html || true
 
-          # runtime intenty pro traffic_law – jen pokud opravdu existují
-          if [ -d "data/intents/traffic_law" ] && ls data/intents/traffic_law/*.json >/dev/null 2>&1; then
-            git add data/intents/traffic_law/*.json
-          else
-            echo "No generated traffic_law intents to add (directory or files not found)."
+          # NEW: runtime intent adresáře + .keep
+          if [ -d "data/intents" ]; then
+          git add data/intents
           fi
 
-          git status || true
+           # (může zůstat i ten podmíněný blok pro *.json – ničemu to nevadí)
+
+          git status
           git commit -m "Update agent HTML reports and traffic_law intents" || echo "No changes to commit"
-          git push || echo "Nothing to push"
+          git push origin HEAD:main || echo "Nothing to push"
 
 
 
-
-
-      
+     
