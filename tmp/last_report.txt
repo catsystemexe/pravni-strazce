@@ -1,43 +1,4 @@
-<!DOCTYPE html>
-<html lang="cs">
-<head>
-    <meta charset="UTF-8">
-    <title>Právní strážce – poslední report agenta</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            margin: 2rem;
-            line-height: 1.5;
-            background: #0f172a;
-            color: #e5e7eb;
-        }
-        pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            background: #020617;
-            padding: 1.5rem;
-            border-radius: 0.75rem;
-            border: 1px solid #1f2937;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        h1 {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-        }
-        .meta {
-            font-size: 0.85rem;
-            color: #9ca3af;
-            margin-bottom: 0.5rem;
-        }
-    </style>
-</head>
-<body>
-    <h1>Právní strážce – poslední report agenta</h1>
-    <div class="meta">
-      Tento soubor generuje GitHub Action z repozitáře catsystemexe/pravni-strazce.
-    </div>
-    <pre>================================================================================
+================================================================================
 ODPOVĚĎ CODING AGENTA:
 
 ## 1. Co chápu ze struktury projektu
@@ -98,7 +59,7 @@ ODPOVĚĎ CODING AGENTA:
 - `llm/client.py` – jednotná abstrakce LLM:
   - backend: `mock` / `openai` podle env.
   - čte parametry z `llm/config.yaml` přes `runtime.config_loader.load_yaml`.
-  - `get_llm_params_for_use_case` má use_casy: `jurisprudence_search`, ostatní -&gt; `legal_analysis` (ale enginy předpokládají i jiné, např. `helper`).
+  - `get_llm_params_for_use_case` má use_casy: `jurisprudence_search`, ostatní -> `legal_analysis` (ale enginy předpokládají i jiné, např. `helper`).
 - `runtime/orchestrator.py` (obsah není ve výpisu, ale z používání v `demo.py` a `api/cli.py`:
   - spouští pipeline.
   - skládá `final_answer` přes `engines/output` + šablony (`templates/answers/legal_answer_with_judikatura.md`).
@@ -223,7 +184,7 @@ engines/intent/
    - Dopad: tyto klíče se při načítání zahodí, přestože dataclass je má → potenciální bug/nekonzistence.
    - Navrhované změny:
      - Do `valid_fields` přidat:
-       - `&quot;intent_group&quot;`, `&quot;examples&quot;`.
+       - `"intent_group"`, `"examples"`.
      - Nebo naopak odstranit z `IntentDefinition` to, co nechcete v datových souborech (ale to by byl horší přístup – dataclass už se používá v enginech).
 
 2. **Standardizovat minimální požadovaná pole v šabloně `intent_template.json`:**
@@ -272,7 +233,7 @@ engines/intent/
 
    - Tak, aby:
      - každý `intent.domain` byl validován proti seznamu domén v `data/schema/domains.json` a/nebo `runtime/domain_catalog`.
-     - vyloučily se překlepy typu `&quot;traffic_law&quot;`, `&quot;trafic_law&quot;`, `&quot;silnicni_pravo&quot;` atd.
+     - vyloučily se překlepy typu `"traffic_law"`, `"trafic_law"`, `"silnicni_pravo"` atd.
    - Vhodné napojit do validačních skriptů v `tools`.
 
 ### 3.3 Konsolidace doménových pravidel a intent domén
@@ -286,15 +247,15 @@ engines/intent/
      - Např. v `runtime/domain_catalog.py` mít strukturu typu:
        ```python
        DOMAIN_MAP = {
-           &quot;traffic_law&quot;: {
-               &quot;code&quot;: &quot;traffic_law&quot;,
-               &quot;label_cs&quot;: &quot;Dopravní právo&quot;,
-               &quot;rules_file&quot;: &quot;engines/domain_rules/spravni.yaml&quot;,  # jen příklad
+           "traffic_law": {
+               "code": "traffic_law",
+               "label_cs": "Dopravní právo",
+               "rules_file": "engines/domain_rules/spravni.yaml",  # jen příklad
            },
-           &quot;criminal_law&quot;: {
-               &quot;code&quot;: &quot;criminal_law&quot;,
-               &quot;label_cs&quot;: &quot;Trestní právo&quot;,
-               &quot;rules_file&quot;: &quot;engines/domain_rules/trestni.yaml&quot;,
+           "criminal_law": {
+               "code": "criminal_law",
+               "label_cs": "Trestní právo",
+               "rules_file": "engines/domain_rules/trestni.yaml",
            },
            ...
        }
@@ -308,29 +269,29 @@ engines/intent/
    - sloupce: `domain_code`, `label_cs`, `source_dir (_source/domains/...)`, `rules_yaml (engines/domain_rules/...)`, příp. `notes`.
    - tím bude pro právníka/autora dat jasné, kde co má udržovat.
 
-### 3.4 LLM use cases &amp; prompts
+### 3.4 LLM use cases & prompts
 
 9. **Standardizovat `use_case` hodnoty v LLM vrstvě:**
 
    - `llm/client.get_llm_params_for_use_case` zná:
-     - `&quot;jurisprudence_search&quot;` → helper model.
-     - vše ostatní → `&quot;legal_analysis&quot;`.
+     - `"jurisprudence_search"` → helper model.
+     - vše ostatní → `"legal_analysis"`.
    - Kód aktuálně používá i:
-     - `&quot;helper&quot;` (v intent enginu, TODO poznámka).
+     - `"helper"` (v intent enginu, TODO poznámka).
    - Návrh:
      - Rozšířit `config.yaml` o:
        ```yaml
        use_cases:
          legal_analysis:
-           model: &quot;gpt-4.1-mini&quot;
+           model: "gpt-4.1-mini"
            temperature: 0.2
            max_tokens: 2000
          helper:
-           model: &quot;gpt-4.1-mini&quot;
+           model: "gpt-4.1-mini"
            temperature: 0.1
            max_tokens: 800
          jurisprudence_search:
-           model: &quot;gpt-4.1-mini&quot;
+           model: "gpt-4.1-mini"
            temperature: 0.1
            max_tokens: 800
        ```
@@ -344,8 +305,8 @@ engines/intent/
         ```python
         from runtime.config_loader import load_text
 
-        def _load_intent_prompt() -&gt; str:
-            return load_text(&quot;engines/intent/prompts/intent_classification.md&quot;)
+        def _load_intent_prompt() -> str:
+            return load_text("engines/intent/prompts/intent_classification.md")
         ```
       - System prompt nahradit načtením z tohoto souboru.
     - Benefit:
@@ -359,12 +320,12 @@ engines/intent/
         - `system_prompt` = combination(base policy + konkrétní prompt).
       - Nebo v `runtime.config_loader` zavést helper:
         ```python
-        def load_policy_prompt(engine_name: str) -&gt; str:
-            path = f&quot;prompts/policy/policy_{engine_name}_engine.md&quot;
+        def load_policy_prompt(engine_name: str) -> str:
+            path = f"prompts/policy/policy_{engine_name}_engine.md"
         ```
       - a enginy pak skládají:
         ```python
-        system_prompt = load_policy_prompt(&quot;intent&quot;) + &quot;\n\n&quot; + load_intent_prompt()
+        system_prompt = load_policy_prompt("intent") + "\n\n" + load_intent_prompt()
         ```
 
 ### 3.5 Šablony odpovědí a dokumentů
@@ -392,11 +353,11 @@ engines/intent/
     - Krok:
       - Rozšířit `IntentDefinition` o pole:
         ```json
-        &quot;document_templates&quot;: [
+        "document_templates": [
           {
-            &quot;id&quot;: &quot;admin_appeal&quot;,
-            &quot;label_cs&quot;: &quot;Odvolání proti rozhodnutí ...&quot;,
-            &quot;template_path&quot;: &quot;templates/documents/traffic/admin_appeal.md&quot;
+            "id": "admin_appeal",
+            "label_cs": "Odvolání proti rozhodnutí ...",
+            "template_path": "templates/documents/traffic/admin_appeal.md"
           }
         ]
         ```
@@ -418,7 +379,7 @@ engines/intent/
       - strukturu `IntentDefinition` (včetně `intent_group`, `examples`, `risk_patterns`).
       - vztah `domain` → doménový katalog (`data/schema/domains.json`).
       - jak má právník postupovat při přidání nového intentu:
-        1. vytvořit JSON v `data/_source/domains/&lt;domain&gt;/intents/...`.
+        1. vytvořit JSON v `data/_source/domains/<domain>/intents/...`.
         2. spustit generátor.
         3. spustit validační skripty.
         4. případně doplnit domain_rules Yaml, pokud je třeba.
@@ -445,7 +406,7 @@ engines/intent/
 
 3. **Obsah `runtime/orchestrator.py` a `runtime/domain_catalog.py`:**
    - Jak orchestrátor předává domény a intenty dál do enginů?
-   - Jak je doménový katalog reprezentován (dict, dataclass, YAML -&gt; Python)?
+   - Jak je doménový katalog reprezentován (dict, dataclass, YAML -> Python)?
 
 4. **Struktura `IntentDefinition` vs. `_source` soubory:**
    - Např. u `traffic_law/intents/*.json`:
@@ -462,6 +423,3 @@ engines/intent/
 
 Pokud doplníš informace k bodům v části 4, můžu navrhnout přesnější refaktoring datových struktur (např. konkrétní JSON/YAML schémata) a vztah mezi intent enginem, doménovým katalogem a core_legal logikou.
 ================================================================================
-</pre>
-</body>
-</html>
