@@ -42,101 +42,36 @@
     <pre>================================================================================
 ODPOVĚĎ CODING AGENTA:
 
-## 1. Co chápu ze struktury projektu
+### 1. Co chápu ze struktury projektu
 
-- Jádro: AI framework „Právní strážce“ s orchestrátorem (`runtime/orchestrator.py`), enginy (`engines/*`) a společnými typy.
-- Domény a intent data:
-  - Zdrojová data domén jsou v `data/_source/domains/&lt;domain&gt;/...` (např. `traffic_law` už má rozpadlé intents).
-  - Validace a generování runtime intentů probíhá přes nástroje v `tools/` (`generate_intents_from_yaml.py`, `validate_intents.py` atd.).
-  - Runtime engine pro intenty (`engines/intent`) načítá JSON soubory z `data/intents/**` a používá je pro heuristickou klasifikaci.
-- Pravidla domén (`engines/domain_rules/*.yaml`) jsou dnes jen pro část českých domén (civil, správní, rodinné, apod.).
-- LLM podpora je v `llm/`, výstupní šablony v `templates/`, produktové konfigurace v `product/`.
-- V adresáři `data/` zatím chybí `data/intents/` (resp. není vylistován žádný obsah), což je důležité pro intent engine a aktuální úkol.
+- Jde o core framework pro právního asistenta „Právní strážce“.
+- Právní logika je rozdělená do modulů (`engines/*`): core_legal, judikatura, risk, safety, intent engine apod.
+- Doménové znalosti jsou v:
+  - `engines/domain_rules/*.yaml` – pravidla pro právní domény (školské, trestní, rodinné atd.).
+  - `data/_source/domains/*` – zdrojové doménové definice a intent JSONy (např. `traffic_law/intents/*.json`).
+- Běhové intent definice se načítají z `data/intents/**` (viz `engines/intent/loader.py`), což je generovaný / runtime adresář, odlišný od `_source`.
+- V `tools/` jsou pomocné skripty pro generování/opravy intentů a validity (`generate_intent_from_domains.py`, `bootstrap_traffic_law_intents.py`, `fix_intent_pipeline_v1.py`, `generate_intents_from_yaml.py`, `validate_intents.py`).
+- CI workflow `.github/workflows/run-agent.yml` (není v dumpu, ale víme, že obsahuje step „Apply FIX script (traffic_law intents)“ volající `tools/fix_intent_pipeline_v1.py`).
+
+Tvůj aktuální úkol je čistě technický:
+- vytvořit nový nástroj pro zajištění adresářů `data/intents/&lt;domain&gt;/` s `.keep`,
+- upravit v CI workflow jeden konkrétní step, aby volal nový skript.
 
 ---
 
-## 2. Konkrétní návrh kroků pro splnění úkolu (.keep, adresáře, idempotence)
+### 2. Návrh konkrétních kroků k úkolu (skript + workflow)
 
-Tyto kroky jsou pro vývojáře – ty máš provést v repozitáři (ručně nebo skriptem). Já soubory nevytvářím.
+#### 2.1. Nový skript `tools/fix_create_intent_runtime_dirs.py`
 
-### 2.1 Přehled požadovaného výsledku
-
-- Musí existovat adresář:
-  - `data/intents/`
-- Pro každou doménu musí existovat:
-  - adresář `data/intents/&lt;domain&gt;/`
-  - prázdný soubor `data/intents/&lt;domain&gt;/.keep` (0 bajtů)
-- Operace má být idempotentní – tedy opakované spuštění nic nerozbije:
-  - adresáře, které už existují, se nemění,
-  - `.keep`, pokud existuje, se nepřepisuje.
-
-### 2.2 Doporučený postup (shell / Unix)
-
-1. Vytvořit root adresář pro runtime intenty:
-
-   ```bash
-   mkdir -p data/intents
-   ```
-
-2. Definovat seznam domén (přesně dle zadání):
-
-   ```bash
-   DOMAINS=(
-     school_law
-     debt_law
-     environmental_law
-     property_construction_law
-     social_law
-     media_ip_law
-     constitutional_law
-     family_law
-     data_digital_law
-     labor_law
-     health_law
-     tax_law
-     administrative_law
-     inheritance_law
-     criminal_law
-     traffic_law
-     corporate_law
-     civil_law
-     consumer_finance_law
-     international_law
-   )
-   ```
-
-3. Pro každou doménu zajistit adresář a `.keep`, idempotentně:
-
-   ```bash
-   for d in &quot;${DOMAINS[@]}&quot;; do
-     # 1) založit adresář domény
-     mkdir -p &quot;data/intents/$d&quot;
-
-     # 2) pokud .keep neexistuje, vytvořit prázdný soubor
-     if [ ! -f &quot;data/intents/$d/.keep&quot; ]; then
-       # POSIX-safe vytvoření prázdného souboru
-       : &gt; &quot;data/intents/$d/.keep&quot;
-     fi
-   done
-   ```
-
-   - `mkdir -p` je idempotentní (nevadí opakované volání).
-   - `: &gt; file` vytvoří nový prázdný soubor; díky `if [ ! -f ... ]` se to spustí jen pokud soubor neexistuje (aby se nic nepřepisovalo).
-
-### 2.3 Doporučený Python skript (např. do `tools/fix_create_intent_runtime_dirs.py`)
-
-Pokud chcete mít fix jako maintainable nástroj:
-
-1. Vytvořit skript (návrh obsahu):
+1. **Vytvořit soubor** `tools/fix_create_intent_runtime_dirs.py` se strukturou:
 
    ```python
-   # tools/fix_create_intent_runtime_dirs.py
+   #!/usr/bin/env python
    from __future__ import annotations
+
    import os
    from pathlib import Path
 
-   REPO_ROOT = Path(__file__).resolve().parents[1]
-   BASE_DIR = REPO_ROOT / &quot;data&quot; / &quot;intents&quot;
 
    DOMAINS = [
        &quot;school_law&quot;,
@@ -161,92 +96,122 @@ Pokud chcete mít fix jako maintainable nástroj:
        &quot;international_law&quot;,
    ]
 
+
+   def ensure_runtime_intent_dirs(base_dir: Path) -&gt; None:
+       &quot;&quot;&quot;
+       Idempotentně zajistí existenci:
+
+       - base_dir (typicky data/intents)
+       - base_dir/&lt;domain&gt; pro všechny DOMAINS
+       - base_dir/&lt;domain&gt;/.keep (prázdný soubor, pokud neexistuje)
+
+       Nic nepřepisuje, jen vytváří, pokud chybí.
+       &quot;&quot;&quot;
+       base_dir.mkdir(parents=True, exist_ok=True)
+
+       for domain in DOMAINS:
+           domain_dir = base_dir / domain
+           domain_dir.mkdir(parents=True, exist_ok=True)
+
+           keep_file = domain_dir / &quot;.keep&quot;
+           if not keep_file.exists():
+               # vytvoří prázdný soubor, pokud ještě není
+               keep_file.touch()
+
+
    def main() -&gt; None:
-       # 1) data/intents/
-       BASE_DIR.mkdir(parents=True, exist_ok=True)
+       repo_root = Path(__file__).resolve().parent.parent
+       base_dir = repo_root / &quot;data&quot; / &quot;intents&quot;
 
-       for dom in DOMAINS:
-           dom_dir = BASE_DIR / dom
-           keep_path = dom_dir / &quot;.keep&quot;
+       ensure_runtime_intent_dirs(base_dir)
 
-           # 2) adresář domény (idempotentní)
-           dom_dir.mkdir(exist_ok=True)
+       # jednoduchý log pro přesměrování do tmp/last_report.txt
+       print(f&quot;[fix_create_intent_runtime_dirs] Ensured runtime dirs in: {base_dir}&quot;)
 
-           # 3) .keep – vytvořit jen pokud neexistuje
-           if not keep_path.exists():
-               keep_path.touch()  # vytvoří 0-byte soubor
+       for domain in DOMAINS:
+           print(f&quot;  - {domain}&quot;)
+
 
    if __name__ == &quot;__main__&quot;:
        main()
    ```
 
-2. Spuštění z rootu projektu:
+   Poznámky:
+   - `Path(__file__).resolve().parent.parent` vychází z toho, že `tools/` je přímo v kořeni repa.
+   - Operace jsou idempotentní:
+     - `mkdir(..., exist_ok=True)` – nevytváří konflikt, pokud adresář existuje.
+     - `.touch()` se volá only-if-not-exists – nezasahuje do existujících `.keep` nebo jiných souborů.
+   - Skript má jednoduchý textový výstup, aby dávalo smysl přesměrování do `tmp/last_report.txt`.
 
-   ```bash
-   python tools/fix_create_intent_runtime_dirs.py
+#### 2.2. Úprava workflow `.github/workflows/run-agent.yml`
+
+2. **Otevřít `.github/workflows/run-agent.yml`** a najít step:
+
+   ```yaml
+   - name: Apply FIX script (traffic_law intents)
+     run: python tools/fix_intent_pipeline_v1.py &gt;&gt; tmp/last_report.txt
    ```
 
-3. Ověření:
+3. **Nahradit pouze řádek `run:`** tímto:
 
-   ```bash
-   ls -R data/intents
-   # a případně velikost .keep
-   find data/intents -name &quot;.keep&quot; -exec ls -l {} \;
+   ```yaml
+   - name: Apply FIX script (traffic_law intents)
+     run: python tools/fix_create_intent_runtime_dirs.py &gt;&gt; tmp/last_report.txt
    ```
+
+   - Název stepu, další kroky a vše okolo ponechat beze změny.
+   - Tím zajistíš, že při CI běhu se před dalšími nástroji vždy vytvoří struktura `data/intents/**`.
 
 ---
 
-## 3. Návrhy na vylepšení architektury / dokumentace kolem intentů a domén
+### 3. Dopady a návrhy na architekturu / data (nad rámec úkolu)
 
-### 3.1 Propojení `_source` a runtime `data/intents/`
+1. **Formální dokotvení runtime vs. source dat pro intents**
+   - V `docs/intent.system.md` doplnit:
+     - jasný popis, že:
+       - `_source/domains/**` = master zdroj pro domény a jejich intent definice,
+       - `data/intents/**` = běhové / zkompilované intent definice, které načítá `engines/intent/loader.py`.
+     - stručnou zmínku o novém skriptu `tools/fix_create_intent_runtime_dirs.py` jako kroku, který připravuje adresářovou strukturu (může být i v sekci „CI / build pipeline“).
 
-- Dnes:
-  - zdrojové definice v `data/_source/domains/&lt;domain&gt;/**`,
-  - runtime adresář `data/intents/` je čtecí endpoint pro `engines/intent.loader`.
-- Doporučení:
-  1. Do `docs/intent.system.md` doplnit sekci „Runtime adresáře intentů“:
-     - vysvětlit, že `data/intents/&lt;domain&gt;/*.json` vznikají generováním z `_source` nebo bootstrap skriptů,
-     - že `.keep` drží prázdné domény v gitu, dokud nejsou definované první JSONy.
-  2. Do `tools/generate_intents_from_yaml.py` (a podobných) přidat konstantu/konfiguraci pro `BASE_RUNTIME_INTENTS_DIR = data/intents` a explicitně zkontrolovat, zda doménový adresář existuje; pokud ne, vytvořit ho (respektuje tímto fix).
+2. **Konzistence seznamu domén**
+   - V doménovém katalogu (`runtime/domain_catalog.py` a `docs/domain_catalog.md`) sladit seznam domén s tím, co je v:
+     - `data/schema/domains.json`
+     - novém skriptu `fix_create_intent_runtime_dirs.py`
+     - `_source/domains/**`
+   - Ideálně:
+     - držet jeden „zdroj pravdy“ pro seznam domén (např. `data/schema/domains.json`),
+     - skript `fix_create_intent_runtime_dirs.py` generovat z tohoto zdroje (do budoucna).
+   - Pro teď je OK „natvrdo“, ale doporučuji do komentáře ve skriptu přidat TODO:
 
-### 3.2 Validace doménového katalogu vs runtime dirs
+     ```python
+     # TODO: v budoucnu načítat seznam domén z data/schema/domains.json
+     ```
 
-- V `data/schema/domains.json` pravděpodobně existuje master seznam domén (není vypsán obsah).
-- Doporučení:
-  1. Vytvořit v `tools/validate_data.py` check:
-     - pro každou doménu v `domains.json`:
-       - existuje `data/_source/domains/&lt;domain&gt;`?
-       - existuje `data/intents/&lt;domain&gt;` a `.keep` nebo alespoň adresář?
-  2. V CI (pokud existuje) spouštět `python tools/validate_data.py` a failnout, pokud chybí adresář pro nějakou doménu (pomáhá předcházet regresím typu „nová doména v katalogu, ale nejsou runtime dirs“).
-
-### 3.3 Úprava intent engine dokumentace
-
-- `engines/intent/loader.py` a `engines/intent/engine.py` spoléhají na `data/intents/**.json`.
-- Návrhy:
-  1. V `docs/intent.system.md` doplnit:
-     - „Intent engine čte pouze JSON soubory v `data/intents/**`; absence adresáře domény znamená, že heuristika pro tuto doménu zatím nebude mít žádné signály.“
-  2. Do `engines/intent/loader.py` doplnit krátký modul-level docstring s popisem:
-     - kde očekává soubory,
-     - že prázdné doménové adresáře s `.keep` jsou v pořádku (jen žádné intenty nenajde).
+3. **Test na existenci runtime adresářů**
+   - Přidat jednoduchý test (např. `tests/test_intent_runtime_dirs.py`), který:
+     - spustí `ensure_runtime_intent_dirs` (ideálně refaktorovat do samostatné funkce, jak výše),
+     - ověří, že pro každou doménu existuje `data/intents/&lt;domain&gt;/.keep`.
+   - Tím se rychle zachytí případné přejmenování domény nebo změnu seznamu bez úpravy skriptu.
 
 ---
 
-## 4. Co není (z tohoto výpisu) úplně jasné
+### 4. Co není úplně jasné / na co bych se doptal
 
-1. Obsah `data/schema/domains.json`:
-   - není vidět, jak přesně jsou domény pojmenované (předpokládám shodu s názvy složek).
-   - pro 100% robustní nástroj by bylo dobré čerpat seznam domén právě z tohoto JSONu, ne z hard-coded listu.
+1. **Zdroj pravdy pro seznam domén**
+   - Má být finálním zdrojem `data/schema/domains.json`, nebo kombinace s `runtime/domain_catalog.py`?
+   - Má nový skript dlouhodobě číst domény z jednoho centrálního schématu, nebo má zůstat „natvrdo“?
 
-2. Napojení generátorů:
-   - `tools/generate_intent_from_domains.py` a `tools/bootstrap_traffic_law_intents.py` – není jasné, jak přesně se dnes používají a zda očekávají existenci `data/intents/&lt;domain&gt;/`.
-   - doporučuji po implementaci tohoto fixu tyto skripty otevřít a případně:
-     - doplnit `mkdir -p data/intents/&lt;domain&gt;` před zápisem,
-     - nebo parametrizovat výstupní cestu.
+2. **Pipeline pro generování `data/intents/**`**
+   - Jak přesně se nyní generují runtime intent JSONy z `_source/domains/**`?
+     - `tools/generate_intent_from_domains.py` vs. `tools/generate_intents_from_yaml.py` vs. `tools/bootstrap_traffic_law_intents.py`.
+   - Bude se `fix_create_intent_runtime_dirs.py` volat jen v CI, nebo i lokálně (např. `make bootstrap-intents`)?
 
-Pokud dodáš obsah `data/schema/domains.json` a případně ukázku některého z `tools/generate_*.py`, můžu navrhnout ještě přesnější úpravy, aby se fix plně integroval do celého data-pipeline.
+Po zodpovězení těchto dvou bodů by šlo:
+- skript napojit na jednotný doménový katalog,
+- doplnit dokumentaci tak, aby vývojář jasně chápal tok: `_source` → generace → `data/intents` → načtení enginem.
 ================================================================================
 Run type : FIX
-Timestamp (UTC) : 2025-11-29T18:57:09Z
+Timestamp (UTC) : 2025-11-29T19:00:55Z
 Task : Automatický bootstrap intentů pro traffic_law + sanity test
 ------------------------------------------------------------------------
 
