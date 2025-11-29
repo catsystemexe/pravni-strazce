@@ -1,0 +1,136 @@
+# ---------------------------------------------------------
+# SUBDOMAIN SITUATION MAP – TRAFFIC LAW
+# Version: 0.1 (draft)
+# Každá subdoména obsahuje seznam typických modelových situací.
+# Tyto situace budou později automaticky expandovat do INTENTS.
+# ---------------------------------------------------------
+
+subdomain_situations:
+
+  speeding:
+    label_cs: Překročení rychlosti
+    situations:
+      - id: speeding_radar_photo
+        label_cs: Radarová fotka + výzva k úhradě
+        description_cs: >
+          Klient obdržel fotodokumentaci z radaru/úsekového měření a výzvu
+          k uhrazení pokuty, případně k identifikaci řidiče.
+      - id: speeding_block_fine
+        label_cs: Bloková pokuta na místě
+        description_cs: >
+          Klient zaplatil pokutu na místě, ale nyní zvažuje, zda bylo měření
+          nebo policie v pořádku.
+      - id: speeding_challenge_measurement
+        label_cs: Zpochybnění měření
+        description_cs: >
+          Klient tvrdí, že měření bylo chybné (technická chyba, kalibrace,
+          špatné umístění radaru).
+      - id: speeding_driver_identity
+        label_cs: Nejasná identifikace řidiče
+        description_cs: >
+          Spor mezi provozovatelem a skutečným řidičem – výzva k podání
+          vysvětlení nebo k určení osoby.
+      - id: speeding_deadline_issue
+        label_cs: Prošvihnutí lhůty / časové vady
+        description_cs: >
+          Klient nestihl reagovat na výzvu nebo oznámení o přestupku.
+
+  alcohol_drugs:
+    label_cs: Alkohol a návykové látky
+    situations:
+      - id: alcohol_breath_test
+        label_cs: Dechová zkouška pozitivní
+        description_cs: >
+          Klient byl zastaven a dechová zkouška vykázala alkohol.
+      - id: alcohol_refusal
+        label_cs: Odmítnutí testu
+        description_cs: >
+          Klient odmítl dechovou nebo krevní zkoušku, hrozí sankce.
+      - id: drugs_orientation_test
+        label_cs: Orientační test na drogy
+        description_cs: >
+          Pozitivní orientační test, čeká se na laboratorní výsledek.
+      - id: alcohol_low_value
+        label_cs: Hraniční hodnoty
+        description_cs: >
+          Alkohol těsně nad nulou, klient tvrdí, že to mohly způsobit zbytky,
+          léky či jiný faktor.
+
+  police_interaction:
+    label_cs: Kontrola řidiče a policie
+    situations:
+      - id: police_legitimization
+        label_cs: Policie mě zastavila, chce doklady
+        description_cs: >
+          Standardní kontrola, klient si není jistý povinnostmi.
+      - id: police_vehicle_seizure
+        label_cs: Zajištění vozidla
+        description_cs: >
+          Policie zabránila v jízdě kvůli závadám či podezření.
+      - id: police_unlawful_order
+        label_cs: Podezření na nezákonnou výzvu
+        description_cs: >
+          Policista údajně překročil pravomoc (prohlídka, příkaz k otevření).
+
+  traffic_accidents:
+    label_cs: Dopravní nehody
+    situations:
+      - id: accident_property_damage
+        label_cs: Škoda na majetku
+        description_cs: >
+          Menší nehoda bez zranění, řeší se odpovědnost nebo pojišťovna.
+      - id: accident_police_call
+        label_cs: Volání policie
+        description_cs: >
+          Spor, zda bylo nutné volat policii k nehodě.
+      - id: accident_driver_fault
+        label_cs: Kdo je viník?
+        description_cs: >
+          Převyprávění situace, řeší se míra zavinění.
+      - id: accident_insurance_dispute
+        label_cs: Spor s pojišťovnou o plnění
+        description_cs: >
+          Pojišťovna odmítla část plnění nebo snížila pojistné.
+
+  vehicle_technical:
+    label_cs: Technický stav a STK
+    situations:
+      - id: technical_stk_fail
+        label_cs: Neprošel STK
+        description_cs: >
+          Klient řeší vady, které vedly k neúspěšné technické kontrole.
+      - id: technical_police_stop
+        label_cs: Policie zakázala další jízdu
+        description_cs: >
+          Vozidlo označeno za technicky nezpůsobilé.
+      - id: technical_emission_issue
+        label_cs: Problém na emisích
+        description_cs: >
+          Klient řeší chybu emisní kontroly.
+
+  administrative_offenses:
+    label_cs: Ostatní dopravní přestupky
+    situations:
+      - id: admin_parking
+        label_cs: Nesprávné parkování
+        description_cs: >
+          Výzva městské policie, botička, bloková pokuta.
+      - id: admin_phone
+        label_cs: Telefonování za jízdy
+        description_cs: >
+          Přestupek bez nehody, často nutné řešit body.
+      - id: admin_red_light
+        label_cs: Jízda na červenou
+        description_cs: >
+          Závažnější přestupek, řešení fotkami, záznamy.
+      - id: admin_seatbelt
+        label_cs: Nepoužití pásů
+        description_cs: >
+          Jednoduchý přestupek, řešení pokuty a bodů.
+
+notes:
+  - Subdomain situations slouží jako “inicializace” pro generátor intents.
+  - Každá situace → později 1 JSON intent soubor.
+  - Situace obsahují jen ID + label + popis: nic víc.
+  - Risk patterns, questions, references vzniknou až v Intent fázi.
+  - Tato vrstva odděluje logiku “co se děje ve světě” od právních postupů.

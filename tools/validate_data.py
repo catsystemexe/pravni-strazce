@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from runtime.config_loader import BASE_DIR
 from runtime.domain_catalog import load_domains, list_domain_ids
 
+from pathlib import Path
+
+DATA_ROOT = Path("data")
+YAML_DOMAINS_ROOT = DATA_ROOT / "_source" / "domains"   # zdrojové YAML
+JSON_INTENTS_ROOT = DATA_ROOT / "intents"               # runtime JSON
 
 DATA_DIR = BASE_DIR / "data"
 INTENTS_DIR = DATA_DIR / "intents"

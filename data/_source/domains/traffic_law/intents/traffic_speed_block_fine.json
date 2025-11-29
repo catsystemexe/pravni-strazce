@@ -1,0 +1,67 @@
+{
+  "intent_id": "traffic_speed_block_fine",
+  "label_cs": "Bloková pokuta za rychlost na místě",
+  "domain": "traffic_law",
+  "subdomains": ["speeding"],
+
+  "description_cs": "Situace, kdy policie vyřešila překročení rychlosti blokově na místě – řidič podepisuje blok nebo příkaz na místě. Řeší se, zda lze blok napadnout, zda podpis něco znamená a jaké jsou další možnosti.",
+  "keywords": [
+    "bloková pokuta",
+    "blokova pokuta",
+    "příkaz na místě",
+    "prikaz na miste",
+    "zaplatil jsem na místě",
+    "zaplatil jsem na miste",
+    "podepsal jsem blok",
+    "pokuta za rychlost na místě"
+  ],
+  "negative_keywords": [
+    "výzva k podání vysvětlení",
+    "vyzva k podani vysvetleni",
+    "radarová fotka",
+    "dopravní nehoda",
+    "dědictví",
+    "rozvod"
+  ],
+
+  "examples": [
+    "Zastavila mě policie za rychlost, dostal jsem blokovou pokutu a podepsal jsem to. Dá se s tím ještě něco dělat?",
+    "Zaplatil jsem na místě pokutu za rychlost, ale teď si myslím, že to nebylo spravedlivé.",
+    "Policie mi dala příkaz na místě za překročení rychlosti a já jsem to podepsal, aniž bych tomu rozuměl."
+  ],
+
+  "risk_patterns": [
+    { "pattern": "blokov[aá]\\s+pokut", "dimensions": ["procedural"] },
+    { "pattern": "prikaz\\s+na\\s+miste", "dimensions": ["procedural"] },
+    { "pattern": "podepsal.*blok", "dimensions": ["liability"] }
+  ],
+
+  "basic_questions": [
+    "Kdy a kde došlo k zastavení a udělení pokuty?",
+    "Jaká byla výše pokuty a zda jsi ji zaplatil na místě?",
+    "Podepsal jsi blok nebo příkaz, a měl jsi možnost si ho přečíst?",
+    "Je na bloku uvedeno, že s projednáním souhlasíš?",
+    "Byl ti předán stejnopis bloku/příkazu a máš ho k dispozici?"
+  ],
+
+  "safety_questions": [
+    "Nejde o situaci, kdy by blok mohl být neplatný (např. zjevně nesprávný orgán nebo přestupek)?",
+    "Neřeší se současně více přestupků, kde by blok mohl zakrývat závažnější problém?",
+    "Není zde paralelně zahájeno správní řízení pro jiný související delikt?"
+  ],
+
+  "normative_references": [
+    "zakon_o_silnicnim_provozu",
+    "zakon_o_odpovednosti_za_prestupky",
+    "spravni_rad"
+  ],
+
+  "conclusion_skeletons": {
+    "low": "Pokud nebyly zjištěny zásadní procesní vady a bloková pokuta byla udělena standardním způsobem, možnosti následné obrany jsou omezené. Je však důležité ověřit obsah a formální náležitosti bloku.",
+    "medium": "Bloková pokuta obvykle znamená, že přestupek byl vyřešen na místě. Pokud jsou však pochybnosti o správnosti postupu policie nebo obsahu bloku, je možné zvažovat mimořádné prostředky nebo alespoň detailní revizi.",
+    "high": "Současný stav naznačuje, že mohlo dojít k vážnějším procesním chybám (nátlak na podpis, nesrozumitelný obsah, rozpor s realitou). Doporučuji nechat blok důkladně zkontrolovat, zvážit podání podnětu nadřízeným orgánům a řešit případnou možnost obnovy řízení."
+  },
+
+  "notes": "Klíčová otázka je, zda bylo projednání na místě dobrovolné a zda řidič rozuměl následkům podpisu.",
+  "version": "1.0.0"
+}

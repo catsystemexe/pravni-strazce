@@ -9,6 +9,12 @@ from typing import Any, Dict, List, Tuple
 
 from engines.intent.definition import IntentDefinition  # dataclass pro JSON intent definice
 
+from pathlib import Path
+
+DATA_ROOT = Path("data")
+YAML_DOMAINS_ROOT = DATA_ROOT / "_source" / "domains"   # zdrojové YAML
+JSON_INTENTS_ROOT = DATA_ROOT / "intents"               # runtime JSON
+
 BASE_DIR = os.path.join("data", "intents")
 
 # --------- konfig validačních pravidel ----------

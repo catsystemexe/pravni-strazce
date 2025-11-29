@@ -1,0 +1,72 @@
+{
+  "intent_id": "traffic_speed_admin_proceeding",
+  "label_cs": "Správní řízení – překročení rychlosti",
+  "domain": "traffic_law",
+  "subdomains": ["speeding"],
+
+  "description_cs": "Případy, kdy už bylo zahájeno správní řízení kvůli překročení rychlosti – účastník má oznámení o zahájení řízení, předvolání, vyrozumění o ústním jednání nebo návrh rozhodnutí. Řeší se strategie obrany, důkazy a lhůty.",
+  "keywords": [
+    "zahájení správního řízení",
+    "zahajeni spravniho rizeni",
+    "správní orgán",
+    "spravni organ",
+    "předvolání k ústnímu jednání",
+    "predvolani k ustnimu jednani",
+    "ústní jednání",
+    "ustni jednani",
+    "spis",
+    "nahlížení do spisu",
+    "navrh rozhodnuti",
+    "vyrozumění o pokračování řízení"
+  ],
+  "negative_keywords": [
+    "bloková pokuta",
+    "příkaz na místě",
+    "dopravní nehoda",
+    "dědictví",
+    "rozvod"
+  ],
+
+  "examples": [
+    "Přišlo mi oznámení o zahájení správního řízení kvůli rychlosti, jak mám postupovat?",
+    "Mám předvolání k ústnímu jednání kvůli překročení rychlosti, co si mám připravit?",
+    "Správní orgán mi poslal návrh rozhodnutí za překročení rychlosti, má smysl podávat námitky?"
+  ],
+
+  "risk_patterns": [
+    { "pattern": "zah[aá]jen[ií].*spr[aá]vn[ií].*r[ií]zen[ií]", "dimensions": ["procedural", "deadline"] },
+    { "pattern": "p[řr]edvol[aá]n[ií].*jedn[aá]n[ií]", "dimensions": ["procedural"] },
+    { "pattern": "lh[uů]ta.*odvol[aá]n[ií]|lh[uů]ta.*vyj[aá]d[řr]en[ií]", "dimensions": ["deadline"] },
+    { "pattern": "z[aá]kaz.*[řr]izen[ií]", "dimensions": ["severity"] }
+  ],
+
+  "basic_questions": [
+    "Kdy ti bylo doručeno oznámení o zahájení správního řízení (datum převzetí)?",
+    "Co je přesně uvedeno v poučení o právech a lhůtách?",
+    "Proběhlo již nějaké ústní jednání, nebo je teprve nařízené?",
+    "Máš k dispozici spis nebo kopie z něj (protokoly, záznam o měření, fotky)?",
+    "Jaké sankce jsou navrhovány (pokuta, body, zákaz řízení)?",
+    "Jde o první přestupek, nebo už jsi dříve řešil podobné řízení?"
+  ],
+
+  "safety_questions": [
+    "Neběží ti už krátká lhůta pro vyjádření nebo podání odvolání?",
+    "Hrozí reálně zákaz řízení vzhledem k historii přestupků a současnému spisu?",
+    "Nejsou ve spise zásadní procesní vady (nepodepsané protokoly, chybějící kalibrace, nejasné měření)?"
+  ],
+
+  "normative_references": [
+    "zakon_o_silnicnim_provozu",
+    "zakon_o_odpovednosti_za_prestupky",
+    "spravni_rad"
+  ],
+
+  "conclusion_skeletons": {
+    "low": "Zatím máme jen základní informaci o zahájení správního řízení. Je nutné přesně znát obsah oznámení, běžící lhůty a důkazy ve spise. Doporučuji nahlédnout do spisu a sepsat časovou osu událostí.",
+    "medium": "Probíhá standardní správní řízení pro překročení rychlosti. Klíčové je ověřit správnost měření, kalibraci přístroje a postup správního orgánu. Doporučuji připravit písemné vyjádření a zvážit návrhy na doplnění dokazování.",
+    "high": "Správní orgán směřuje k uložení závažné sankce (např. zákaz řízení) nebo jsou ve spise viditelné procesní vady. Doporučuji intenzivní procesní obranu – námitky, návrhy na důkazy, případně přípravu na opravné prostředky proti rozhodnutí."
+  },
+
+  "notes": "Klíčová kombinace: běžící lhůty + závažnost sankcí + kvalita důkazů ve spise.",
+  "version": "1.0.0"
+}

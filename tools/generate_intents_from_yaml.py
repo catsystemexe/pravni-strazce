@@ -9,6 +9,11 @@ from typing import Any, Dict, List
 import yaml  # používáme stejnou knihovnu jako config_loader
 from engines.intent.definition import IntentDefinition
 
+from pathlib import Path
+
+DATA_ROOT = Path("data")
+YAML_DOMAINS_ROOT = DATA_ROOT / "_source" / "domains"   # zdrojové YAML
+JSON_INTENTS_ROOT = DATA_ROOT / "intents"               # runtime JSON
 
 DEFAULT_OUTPUT_BASE = os.path.join("data", "intents")
 

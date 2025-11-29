@@ -1,4 +1,5 @@
 # tools/generate_intents_from_domains.py
+# tools/generate_intents_from_domains.py
 from __future__ import annotations
 
 import argparse
@@ -6,30 +7,34 @@ import json
 import os
 from typing import Any, Dict, List
 
-import yaml  # PyYAML
+BASE_SRC_DIR = os.path.join("data", "_source", "domains")   # NOVÁ CESTA
 
 
-# Kořen pro intent data (JSON + YAML zdroje)
-DATA_ROOT = os.path.join("data", "intents")
-DOMAINS_SRC_DIR = os.path.join(DATA_ROOT, "_source", "domains")
-
-
-def load_domain_yaml(domain: str, base_src_dir: str = DOMAINS_SRC_DIR) -> Dict[str, Any]:
+def load_domain_yaml(domain: str, base_src_dir: str = BASE_SRC_DIR) -> Dict[str, Any]:
     """
-    Načte YAML pro danou doménu z data/intents/_source/domains/<domain>.yaml.
+    Načte hlavní YAML pro danou doménu.
+    Očekává soubor data/_source/domains/<domain>/domain.yaml
     """
-    yaml_path = os.path.join(base_src_dir, f"{domain}.yaml")
-
+    yaml_path = os.path.join(base_src_dir, domain, "domain.yaml")
     if not os.path.exists(yaml_path):
         raise FileNotFoundError(f"YAML pro doménu '{domain}' neexistuje: {yaml_path}")
 
+    import yaml  # type: ignore
     with open(yaml_path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+        return yaml.safe_load(f)
 
-    if not isinstance(data, dict):
-        raise ValueError(f"YAML {yaml_path} musí být objekt (dict), ne {type(data)}.")
 
-    return data
+def load_subdomains_yaml(domain: str, base_src_dir: str = BASE_SRC_DIR) -> Dict[str, Any]:
+    """
+    Volitelné subdomény – data/_source/domains/<domain>/subdomains.yaml
+    """
+    yaml_path = os.path.join(base_src_dir, domain, "subdomains.yaml")
+    if not os.path.exists(yaml_path):
+        return {}
+
+    import yaml  # type: ignore
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 
 def generate_intents_for_domain(

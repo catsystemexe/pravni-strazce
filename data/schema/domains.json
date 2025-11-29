@@ -1,125 +1,24 @@
 {
-  "$schema": "https://pravni-strazce.local/schema/domains-v1",
   "domains": [
-    {
-      "id": "civil_law",
-      "label_cs": "Občanské právo",
-      "description_cs": "Smlouvy, náhrada škody, vlastnictví, sousedské spory, dluhy mezi osobami.",
-      "yaml_rules": "engines/domain_rules/civil.yaml",
-      "aliases": ["civil", "občanské", "občanské právo"],
-      "typical_intents": ["complaint", "document_check", "info"],
-      "packs": ["common", "civil"],
-      "priority": 50
-    },
-    {
-      "id": "family_law",
-      "label_cs": "Rodinné právo",
-      "description_cs": "Rozvod, péče o dítě, výživné, styk s dítětem.",
-      "yaml_rules": "engines/domain_rules/rodinne.yaml",
-      "aliases": ["family", "rodinné", "rodinné právo"],
-      "typical_intents": ["complaint", "document_check", "info"],
-      "packs": ["family", "civil"],
-      "priority": 60
-    },
-    {
-      "id": "inheritance_law",
-      "label_cs": "Dědické právo",
-      "description_cs": "Dědická řízení, závěti, podíly dědiců, vypořádání pozůstalosti.",
-      "yaml_rules": "engines/domain_rules/notarske.yaml",
-      "aliases": ["inheritance", "dědictví", "pozůstalost"],
-      "typical_intents": ["inheritance", "complaint", "document_check", "info"],
-      "packs": ["civil", "family"],
-      "priority": 70
-    },
-    {
-      "id": "labour_law",
-      "label_cs": "Pracovní právo",
-      "description_cs": "Výpovědi, mzda, pracovní podmínky, pracovní úrazy.",
-      "yaml_rules": "engines/domain_rules/civil.yaml",
-      "aliases": ["labour", "pracovní", "zaměstnání"],
-      "typical_intents": ["labor_termination", "complaint", "document_check"],
-      "packs": ["civil"],
-      "priority": 55
-    },
-    {
-      "id": "administrative_law",
-      "label_cs": "Správní právo",
-      "description_cs": "Rozhodnutí úřadů, odvolání, přestupky mimo dopravu.",
-      "yaml_rules": "engines/domain_rules/spravni.yaml",
-      "aliases": ["správní", "správní právo", "úřad"],
-      "typical_intents": ["appeal_admin_decision", "complaint", "info"],
-      "packs": ["common"],
-      "priority": 50
-    },
-    {
-      "id": "traffic_offences",
-      "label_cs": "Dopravní přestupky",
-      "description_cs": "Rychlost, pásy, telefon, zákaz řízení, body.",
-      "yaml_rules": "engines/domain_rules/spravni.yaml",
-      "aliases": ["doprava", "přestupek za rychlost", "radar", "pokuta za rychlost"],
-      "typical_intents": ["traffic_speed_offence", "complaint", "info"],
-      "packs": ["common"],
-      "priority": 65
-    },
-    {
-      "id": "school_law",
-      "label_cs": "Školské právo",
-      "description_cs": "Vztah škola–žák–rodič, kázeňské postihy, vyloučení, šikana, OSPOD.",
-      "yaml_rules": "engines/domain_rules/skolske.yaml",
-      "aliases": ["škola", "školské", "školní problém"],
-      "typical_intents": ["school_dispute", "complaint", "info"],
-      "packs": ["school"],
-      "priority": 90
-    },
-    {
-      "id": "criminal_law",
-      "label_cs": "Trestní právo",
-      "description_cs": "Podezření, obvinění, poškozený, náhrada škody v trestním řízení.",
-      "yaml_rules": "engines/domain_rules/trestni.yaml",
-      "aliases": ["trestní", "trestní právo", "trestní řízení"],
-      "typical_intents": ["criminal_defense", "info"],
-      "packs": ["common"],
-      "priority": 70
-    },
-    {
-      "id": "health_law",
-      "label_cs": "Zdravotnické právo",
-      "description_cs": "Zdravotní péče, souhlasy, pochybení, dokumentace, odmítnutí léčby.",
-      "yaml_rules": "engines/domain_rules/zdravotnicke.yaml",
-      "aliases": ["zdravotnictví", "nemocnice", "lékař"],
-      "typical_intents": ["complaint", "document_check", "info"],
-      "packs": ["common"],
-      "priority": 55
-    },
-    {
-      "id": "consumer_law",
-      "label_cs": "Spotřebitelské právo",
-      "description_cs": "Reklamace, e-shopy, úvěry, pojištění, nekalé praktiky.",
-      "yaml_rules": "engines/domain_rules/spotrebitel.yaml",
-      "aliases": ["spotřebitel", "reklamace", "úvěr", "smlouva o úvěru"],
-      "typical_intents": ["consumer_credit", "complaint", "document_check"],
-      "packs": ["common"],
-      "priority": 60
-    },
-    {
-      "id": "notarial_law",
-      "label_cs": "Notářská agenda",
-      "description_cs": "Notářská řízení, úkony, úschovy, ověřování.",
-      "yaml_rules": "engines/domain_rules/notarske.yaml",
-      "aliases": ["notář", "notářská", "notářské řízení"],
-      "typical_intents": ["inheritance", "document_check", "complaint", "info"],
-      "packs": ["civil"],
-      "priority": 65
-    },
-    {
-      "id": "other",
-      "label_cs": "Ostatní / neurčeno",
-      "description_cs": "Dotazy, které nelze bezpečně zařadit, obecná orientace.",
-      "yaml_rules": null,
-      "aliases": ["ostatní", "neurčeno"],
-      "typical_intents": ["info"],
-      "packs": ["common"],
-      "priority": 10
-    }
+    "administrative_law",
+    "civil_law",
+    "consumer_finance_law",
+    "criminal_law",
+    "labor_law",
+    "traffic_law",
+    "family_law",
+    "inheritance_law",
+    "school_law",
+    "contract_law",
+    "property_law",
+    "housing_law",
+    "insurance_law",
+    "tax_law",
+    "social_security_law",
+    "health_law",
+    "business_law",
+    "ip_law",
+    "procedural_law",
+    "data_protection_law"
   ]
 }

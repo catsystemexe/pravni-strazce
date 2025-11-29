@@ -1,0 +1,45 @@
+{
+  "intent_id": "traffic_speed_offense_police_stop",
+  "label_cs": "Rychlost – zastavení policií",
+  "domain": "traffic_law",
+  "subdomains": ["speeding", "police_interaction"],
+  "description_cs": "Řidič byl zastaven policií kvůli rychlosti. Může jít o blokovou pokutu, poučení, nebo zahájení správního řízení.",
+  "keywords": [
+    "policie mě zastavila",
+    "zastavili mě kvůli rychlosti",
+    "policista měřil rychlost",
+    "bloková pokuta",
+    "příkaz na místě"
+  ],
+  "negative_keywords": ["alkohol", "nehoda"],
+  "examples": [
+    "Zastavila mě policie a dali mi blokovou pokutu. Co s tím?",
+    "Policista tvrdí, že jsem jel rychle, ale nic mi neukázal.",
+    "Můžu odmítnout podepsat blokovou pokutu?"
+  ],
+  "risk_patterns": [
+    { "pattern": "neukazal", "dimensions": ["authority"] },
+    { "pattern": "prikaz.*miste", "dimensions": ["procedural"] }
+  ],
+  "basic_questions": [
+    "Šlo o blokovou pokutu nebo oznámení o přestupku?",
+    "Byl předložen důkaz o měření?",
+    "Byl přestupek přiznán nebo popřen?",
+    "Byl dán příkaz na místě?",
+    "Hrozí body?"
+  ],
+  "safety_questions": [
+    "Běží lhůta pro odpor?",
+    "Hrozí zákaz řízení?"
+  ],
+  "normative_references": [
+    "zakon_o_silnicnim_provozu",
+    "spravni_rad"
+  ],
+  "conclusion_skeletons": {
+    "low": "Je nutné doplnit podrobnosti o zastavení.",
+    "medium": "Situace je běžná – doporučuji zkontrolovat blok a poučení.",
+    "high": "Postup policie může být vadný – vhodné napadnout postup."
+  },
+  "version": "1.0.0"
+}
