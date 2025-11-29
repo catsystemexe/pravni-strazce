@@ -1,89 +1,68 @@
-#!/usr/bin/env python3
-"""
-Jednoduchý bootstrap pro traffic_law:
-- vezme všechny JSON soubory v
-    data/_source/domains/traffic_law/intents/*.json
-- doplní jim:
-    - intent_id (pokud chybí) z názvu souboru
-    - domain = "traffic_law" (přepíše / doplní)
-- uloží je do:
-    data/intents/traffic_law/<stejné_jméno>.json
+#!/usr/bin/env python
+from __future__ import annotations
 
-Bez importu z `engines.*` – je to čistý datový kopírovací krok.
-"""
-print("BOOTSTRAP_VERSION = traffic_law_v3_no_engines")
-
-
-from pathlib import Path
 import json
-from typing import Any, Dict
-
-
-# Kořen projektu: .../pravni-strazce/pravni-strazce
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-SOURCE_DIR = PROJECT_ROOT / "data" / "_source" / "domains" / "traffic_law" / "intents"
-TARGET_DIR = PROJECT_ROOT / "data" / "intents" / "traffic_law"
-
-
-def _ensure_target_dir() -> None:
-    TARGET_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _load_json(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _prepare_intent(raw: Dict[str, Any], filename_stem: str) -> Dict[str, Any]:
-    """
-    Minimální příprava runtime intentu:
-    - doplní intent_id, pokud chybí
-    - nastaví domain = "traffic_law"
-    Ostatní pole nechává tak, jak jsou v _source.
-    """
-    if "intent_id" not in raw and "id" not in raw:
-        raw["intent_id"] = filename_stem
-    elif "id" in raw and "intent_id" not in raw:
-        # sjednocení staršího klíče
-        raw["intent_id"] = raw["id"]
-
-    # pevná doména pro tento bootstrap
-    raw["domain"] = "traffic_law"
-
-    return raw
-
-
-def bootstrap_traffic_law_intents() -> int:
-    """
-    Vygeneruje data/intents/traffic_law/*.json z
-    data/_source/domains/traffic_law/intents/*.json.
-    Je idempotentní – opakované spuštění jen přepíše existující soubory.
-    """
-    _ensure_target_dir()
-
-    if not SOURCE_DIR.exists():
-        print(f"[bootstrap_traffic_law_intents] SOURCE_DIR not found: {SOURCE_DIR}")
-        return 0
-
-    count = 0
-    for path in sorted(SOURCE_DIR.glob("*.json")):
-        raw = _load_json(path)
-        prepared = _prepare_intent(raw, path.stem)
-
-        target_path = TARGET_DIR / path.name
-        with target_path.open("w", encoding="utf-8") as f:
-            json.dump(prepared, f, ensure_ascii=False, indent=2)
-
-        print(f"[bootstrap_traffic_law_intents] wrote {target_path}")
-        count += 1
-
-    print(f"[bootstrap_traffic_law_intents] total intents: {count}")
-    return count
+from pathlib import Path
 
 
 def main() -> None:
-    bootstrap_traffic_law_intents()
+    # root repo:  .../pravni-strazce/
+    repo_root = Path(__file__).resolve().parents[1]
+
+    src_dir = repo_root / "data" / "_source" / "domains" / "traffic_law" / "intents"
+    dst_dir = repo_root / "data" / "intents" / "traffic_law"
+
+    if not src_dir.is_dir():
+        print(f"[bootstrap_traffic_law] SOURCE dir not found: {src_dir}")
+        return
+
+    dst_dir.mkdir(parents=True, exist_ok=True)
+
+    copied = 0
+    skipped = 0
+
+    for src_path in sorted(src_dir.glob("*.json")):
+        dst_path = dst_dir / src_path.name
+
+        # načti zdroj
+        try:
+            raw = src_path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+        except Exception as exc:
+            print(f"[bootstrap_traffic_law] !! ERROR reading {src_path}: {exc}")
+            skipped += 1
+            continue
+
+        # zajisti, že doména je traffic_law (když chybí, doplníme)
+        if "domain" not in data:
+            data["domain"] = "traffic_law"
+        elif data["domain"] != "traffic_law":
+            print(
+                f"[bootstrap_traffic_law] WARNING: intent {src_path.name} "
+                f"má domain={data['domain']} (čekám traffic_law)"
+            )
+
+        # zapiš do runtime adresáře – jednoduchý "copy + normalize"
+        new_text = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True)
+
+        # pokud existuje stejný obsah, nezapisuj zbytečně
+        if dst_path.exists():
+            try:
+                old_text = dst_path.read_text(encoding="utf-8")
+            except Exception:
+                old_text = ""
+            if old_text == new_text:
+                skipped += 1
+                continue
+
+        dst_path.write_text(new_text, encoding="utf-8")
+        copied += 1
+        print(f"[bootstrap_traffic_law] updated: {dst_path.relative_to(repo_root)}")
+
+    print(
+        f"[bootstrap_traffic_law] DONE – updated={copied}, unchanged={skipped}, "
+        f"source_dir={src_dir}"
+    )
 
 
 if __name__ == "__main__":
