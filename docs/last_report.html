@@ -42,209 +42,272 @@
     <pre>================================================================================
 ODPOVĚĎ CODING AGENTA:
 
-## Co chápu ze struktury projektu
+## 1. Co chápu ze struktury projektu
 
-- Jádro je AI framework „Právní strážce“:
-  - `runtime/` – orchestrátor, doménový katalog, config loader.
-  - `engines/` – jednotlivé moduly (core_legal, judikatura, risk, intent, safety…).
-  - `llm/` – jeden oficiální LLM klient s konfigurací v YAML.
-  - `templates/` + `docs/` – šablony výstupů a dokumentace architektury.
-  - `data/_source/domains/**` – primární doménová data, včetně traffic_law (vč. intentů).
-  - `data/intents/**` – cílové/generované intent JSONy používané `engines/intent`.
-  - `tools/` – skripty pro generování/validaci intentů, reportů, FIX pipeline.
-  - `coding_agent.py` + `agent_config.json` – meta-agent pro práci s repozitářem.
-- CI (GitHub Actions) má job „Coding agent – Právní strážce“, který:
-  - generuje HTML reporty (`docs/latest.html` apod.),
-  - generuje a opravuje intent data (např. pro `traffic_law`),
-  - v kroku „Commit and push HTML reports + generated intents“ commituje:
-    - HTML reporty,
-    - vygenerované intenty v `data/intents/**`.
-- Problém: když ještě neexistují žádné `data/intents/traffic_law/*.json`, git-commit step selže (např. kvůli chybějícím souborům nebo chybě při `git add`/`git diff`).
+- Repo je core backend pro „Právní strážce“ s jasně oddělenými vrstvami:
+  - `engines/*` – funkční logika (intent, core_legal, risk, …).
+  - `runtime/*` – orchestrátor a pipeline.
+  - `llm/*`, `prompts/*`, `templates/*` – LLM a šablony výstupů.
+  - `data/` – datová vrstva:
+    - `data/intents/` – runtime JSON pro intent engine.
+    - `data/_source/` – zdrojová, „master“ data domén a intentů.
+    - `data/_source/_template/intent_template.json` – šablona pro nové intenty.
+    - `data/_source/domains/` – per‑doménová data (části mají už `intents/` podadresář, např. `traffic_law`).
+
+Tvůj konkrétní úkol je „FIX“ čistě v `data/_source/domains`: pro každou existující doménu zajistit
+- podadresář `intents/`
+- a v něm `README.md` placeholder (pokud neexistuje).
 
 ---
 
-## Konkrétní návrh úprav workflow (run-agent.yml)
+## 2. Analýza konkrétní situace v `data/_source/domains`
 
-&gt; Pozn.: Soubor `.github/workflows/run-agent.yml` nemám v promptu načtený, takže níže popisuji přesný princip a příkladový YAML, který máš aplikovat na reálný workflow. Důležité je: neměnit nic jiného než konkrétní `git add ...traffic_law` řádek a zachovat ostatní příkazy.
+Z výpisu struktury vyplývá, že aktuálně existují tyto doménové složky:
 
-### 1) Najít správný workflow
+1. `school_law`
+2. `debt_law`
+3. `environmental_law`
+4. `property_construction_law`
+5. `social_law`
+6. `media_ip_law`
+7. `constitutional_law`
+8. `family_law`
+9. `data_digital_law`
+10. `labor_law`
+    - má soubor `labor_termination.json` přímo v kořeni domény
+    - nemá podadresář `intents/` (v seznamu nevidím)
+11. `health_law`
+12. `tax_law`
+13. `administrative_law`
+    - má `appeal_admin_decision.json` v kořeni domény
+14. `inheritance_law`
+15. `criminal_law`
+    - má `criminal_defense.json` v kořeni domény
+16. `traffic_law`
+    - má `domain.yaml`, `subdomains.yaml`, `readme.md`
+    - má `intents/` s více JSON soubory (již ve správné cílové struktuře)
+17. `corporate_law`
+18. `civil_law`
+19. `consumer_finance_law`
+    - má `consumer_credit.json` v kořeni domény
+20. `international_law`
 
-1. Otevři `.github/workflows/run-agent.yml` (nebo workflow s jobem `run-agent` a stepem `Commit and push HTML reports + generated intents`).
+Z toho plyne:
 
-2. Uvnitř tohoto workflow najdi job, který obsahuje step např.:
+- Požadavek 1 (najít domény) je jasný: pracujeme přesně s těmito 20 složkami.
+- Požadavek 2–3: `traffic_law` už `intents/` má, ostatní zatím ne (minimálně nejsou ve výpisu).
+- U žádné domény kromě `traffic_law` nevidím `intents/` – tedy je velmi pravděpodobné, že je potřeba je vytvořit pro 19 domén.
+- V žádném `intents/` kromě `traffic_law` (a ani tam) nevidím README, tzn.:
+  - pro `traffic_law/intents/` ověřit existenci `README.md` – ve výpisu není, takže jej bude třeba vytvořit,
+  - pro nově zakládané `intents/` u ostatních domén také založit `README.md`.
 
-```yaml
-- name: Commit and push HTML reports + generated intents
-  run: |
-    # ... existující git příkazy ...
-```
-
-3. Ujisti se, že v tomto stepu jsou:
-   - příkazy pro přidání HTML reportů (`docs/latest.html`, případně další),
-   - příkazy typu `git status`, `git commit`, `git push` apod.,
-   - někde uvnitř příkaz `git add data/intents/traffic_law/*.json` (nebo velmi podobný – možná přes relativní cestu nebo s globem).
-
----
-
-### 2) Zachovat vše okolo a jen nahradit jeden `git add` blok
-
-Logika požadavku:
-
-- Všechny existující příkazy týkající se HTML reportů musí zůstat beze změny (před i za vloženým blokem).
-- Pouze ten **jeden řádek**, který „natvrdo“ přidává traffic_law intent JSONy, se nahradí blokem, který:
-  - když soubory existují → provede `git add ...`,
-  - když neexistují → zaloguje hlášku a skončí úspěšně.
-
-Typicky tam dnes bude něco jako:
-
-```yaml
-- name: Commit and push HTML reports + generated intents
-  run: |
-    git config user.name &quot;github-actions[bot]&quot;
-    git config user.email &quot;github-actions[bot]@users.noreply.github.com&quot;
-
-    git add docs/latest.html
-    git add data/intents/traffic_law/*.json   # ← TENTO ŘÁDEK NAHRADIT
-    git status
-
-    git commit -m &quot;Update reports and intents&quot; || echo &quot;Nothing to commit&quot;
-    git push origin HEAD:main || echo &quot;Nothing to push&quot;
-```
-
-**TENTO ŘÁDEK**:
-
-```bash
-git add data/intents/traffic_law/*.json
-```
-
-nahraď následujícím blokem (se správným odsazením v YAML):
-
-```yaml
-    if ls data/intents/traffic_law/*.json 1&gt; /dev/null 2&gt;&amp;1; then
-      git add data/intents/traffic_law/*.json
-    else
-      echo &quot;No generated traffic_law intents to add (directory or files not found).&quot;
-    fi
-```
-
-Celý step pak bude vypadat zhruba takto (HTML a ostatní příkazy jen příklad – u sebe použij přesný existující obsah, jen vyměň `git add` pro traffic_law):
-
-```yaml
-- name: Commit and push HTML reports + generated intents
-  run: |
-    git config user.name &quot;github-actions[bot]&quot;
-    git config user.email &quot;github-actions[bot]@users.noreply.github.com&quot;
-
-    # Původní příkazy pro HTML – ZACHOVAT
-    git add docs/latest.html
-    # případně další HTML/CSS/MD reporty:
-    # git add docs/some_other_report.html
-
-    # 🔹 NOVÝ blok pro traffic_law intents
-    if ls data/intents/traffic_law/*.json 1&gt; /dev/null 2&gt;&amp;1; then
-      git add data/intents/traffic_law/*.json
-    else
-      echo &quot;No generated traffic_law intents to add (directory or files not found).&quot;
-    fi
-
-    # Původní git status / commit / push – ZACHOVAT
-    git status
-    git commit -m &quot;Update reports and intents&quot; || echo &quot;Nothing to commit, working tree clean&quot;
-    git push origin HEAD:main || echo &quot;Nothing to push&quot;
-```
-
-Klíčové:
-
-- Indentace musí zůstat 4 mezery pod `run: |` (tak jak je celý shell blok).
-- Neodstraňuj ani neupravuj:
-  - žádné příkazy pro HTML reporty,
-  - žádné ostatní `git add`, `git status`, `git commit`, `git push`,
-  - žádné ostatní kroky workflow, joby ani soubory.
+Co mi chybí / co je potřeba si na straně vývojáře ověřit při implementaci:
+- Zda se na disku skutečně nenachází nějaké `intents/` podadresáře nebo README, které nejsou ve zkráceném výpisu (ale podle poskytnuté struktury budeme vycházet z toho, že nejsou).
 
 ---
 
-### 3) Co tím dosáhneš (očekávaný výsledek)
+## 3. Návrh konkrétních kroků pro vývojáře
 
-1. **Když `data/intents/traffic_law/*.json` neexistují:**
-   - Step „Apply FIX script (traffic_law intents)” normálně doběhne (i kdyby nic nevytvořil).
-   - Step „Commit and push HTML reports + generated intents“:
-     - úspěšně proběhne bez chyby,
-     - do logu vypíše:
-       - standardní výstupy z ostatních git příkazů,
-       - novou hlášku:
-         `No generated traffic_law intents to add (directory or files not found).`
-   - Job `run-agent` skončí jako `success`.
+### 3.1. Vytvoření standardizované struktury domén (`intents/` + README)
 
-2. **Jakmile budou `data/intents/traffic_law/*.json` existovat:**
-   - `ls data/intents/traffic_law/*.json` vrátí úspěch,
-   - provede se `git add data/intents/traffic_law/*.json`,
-   - commit/push zahrne jak:
-     - HTML reporty,
-     - tak tyto nově vygenerované intent JSONy.
+1. **Vylistovat existující domény**
 
----
+   Na rootu repa:
 
-## Dopady na architekturu / data a další doporučení
+   ```bash
+   cd path/to/repo
 
-1. **Konzistence intentů:**
-   - `engines/intent/loader.py` čte z `data/intents/**`.  
-     Ujisti se, že:
-     - skripty v `tools/` (zejm. `generate_intents_from_yaml.py`, `bootstrap_traffic_law_intents.py`, `fix_intent_pipeline_v1.py`) vždy generují výstup do `data/intents/traffic_law/` (nebo že je tam FIX pipeline přesune).
-   - Doporučení: v `docs/intent.system.md` doplnit stručný popis:
-     - vztah `data/_source/domains/**` → `data/intents/**`,
-     - jak konkrétně CI/FIX pipeline tyto soubory generuje.
+   ls data/_source/domains
+   ```
 
-2. **Robustnost CI pro další domény:**
-   - Stejný vzor se bude hodit, jakmile přidáte další domény s generovanými intenty (`data/intents/family_law/*.json`, atd.).
-   - Doporučuji přidat v budoucnu malou bash funkci do stejného stepu, např.:
+   Očekávaný seznam (musí odpovídat výpisu, ale bere se reálný stav disku):
 
-     ```bash
-     add_if_exists() {
-       local pattern=&quot;$1&quot;
-       local label=&quot;$2&quot;
-       if ls $pattern 1&gt; /dev/null 2&gt;&amp;1; then
-         git add $pattern
-       else
-         echo &quot;No generated $label intents to add (directory or files not found).&quot;
+   - `school_law`
+   - `debt_law`
+   - `environmental_law`
+   - `property_construction_law`
+   - `social_law`
+   - `media_ip_law`
+   - `constitutional_law`
+   - `family_law`
+   - `data_digital_law`
+   - `labor_law`
+   - `health_law`
+   - `tax_law`
+   - `administrative_law`
+   - `inheritance_law`
+   - `criminal_law`
+   - `traffic_law`
+   - `corporate_law`
+   - `civil_law`
+   - `consumer_finance_law`
+   - `international_law`
+
+2. **Pro každou doménu zajistit adresář `intents/` (idempotentně)**
+
+   V shellu lze použít:
+
+   ```bash
+   for d in data/_source/domains/*; do
+       [ -d &quot;$d&quot; ] || continue
+       mkdir -p &quot;$d/intents&quot;
+   done
+   ```
+
+   - `mkdir -p` je idempotentní – opakované spuštění nemění existující strukturu.
+
+3. **Vytvořit README.md placeholder tam, kde chybí**
+
+   Skript v shellu:
+
+   ```bash
+   for d in data/_source/domains/*; do
+       [ -d &quot;$d&quot; ] || continue
+       intents_dir=&quot;$d/intents&quot;
+       readme=&quot;$intents_dir/README.md&quot;
+
+       if [ ! -f &quot;$readme&quot; ]; then
+           domain_code=&quot;$(basename &quot;$d&quot;)&quot;
+           cat &gt; &quot;$readme&quot; &lt;&lt;EOF
+# Intenty pro doménu ${domain_code}
+
+Tento adresář je určen pro zdrojové definice intentů domény ${domain_code} ve formátu JSON/YAML. Zatím zde nejsou žádné konkrétní intent definice – jde pouze o placeholder pro budoucí práci.
+EOF
        fi
-     }
+   done
+   ```
 
-     add_if_exists &quot;data/intents/traffic_law/*.json&quot; &quot;traffic_law&quot;
-     ```
+   - Podmínka `if [ ! -f &quot;$readme&quot; ]` zajistí, že případné existující README se **nepřepíše**.
+   - Obsah je sjednocený s textem z úkolu (pouze dosazen `&lt;domain_code&gt;`).
 
-     ale to už je nad rámec současného úkolu – teď změň jen jeden blok.
+4. **Nezasahovat mimo `data/_source/domains`**
 
-3. **Co není z promptu jasné (můžeš ověřit):**
-   - Jak přesně jsou pojmenované HTML reporty a zda se přidává jen `docs/latest.html`, nebo i další soubory (CSS, assets).
-   - Jak přesně vypadá commit message a zda se někde neparsuje (pokud by se v jiných automatech očekával konkrétní text).
-   - Zda `Apply FIX script (traffic_law intents)` reálně vždy vytvoří adresář `data/intents/traffic_law/`, nebo jen soubory – pokud by neadresář, lze případně v budoucnu doplnit ochranu i na úrovni `mkdir -p`.
+   - Nepřesouvat existující `.json` soubory (`labor_termination.json`, `criminal_defense.json` atd.) – úkol se výslovně omezuje jen na vytvoření adresářů a README placeholderů.
+   - Nic neměnit v `data/intents/`, `engines/`, `runtime/`, `docs/` atd.
+   - Nesahej na `domain.yaml`, `subdomains.yaml` či existující intent JSON/YAML.
+
+5. **(Volitelně) Připravit malý Python util skript pro opakované použití**
+
+   Pokud preferujete Python:
+
+   ```python
+   # tools/fix_domains_intents_dirs.py  (návrh umístění)
+
+   from pathlib import Path
+
+   ROOT = Path(__file__).resolve().parents[1]
+   DOMAINS_ROOT = ROOT / &quot;data&quot; / &quot;_source&quot; / &quot;domains&quot;
+
+   def main() -&gt; None:
+       created_dirs = []
+       created_readmes = []
+
+       for domain_dir in DOMAINS_ROOT.iterdir():
+           if not domain_dir.is_dir():
+               continue
+
+           intents_dir = domain_dir / &quot;intents&quot;
+           if not intents_dir.exists():
+               intents_dir.mkdir(parents=True, exist_ok=True)
+               created_dirs.append(domain_dir.name)
+
+           readme = intents_dir / &quot;README.md&quot;
+           if not readme.exists():
+               content = (
+                   f&quot;# Intenty pro doménu {domain_dir.name}\n\n&quot;
+                   f&quot;Tento adresář je určen pro zdrojové definice intentů &quot;
+                   f&quot;domény {domain_dir.name} ve formátu JSON/YAML. &quot;
+                   f&quot;Zatím zde nejsou žádné konkrétní intent definice – jde &quot;
+                   f&quot;pouze o placeholder pro budoucí práci.\n&quot;
+               )
+               readme.write_text(content, encoding=&quot;utf-8&quot;)
+               created_readmes.append(domain_dir.name)
+
+       # Jednoduchý report do stdout
+       print(f&quot;Domains found: {len(list(DOMAINS_ROOT.iterdir()))}&quot;)
+       print(&quot;created intents dir:&quot;, &quot;, &quot;.join(created_dirs) or &quot;(none)&quot;)
+       print(&quot;created README:&quot;, &quot;, &quot;.join(created_readmes) or &quot;(none)&quot;)
+
+
+   if __name__ == &quot;__main__&quot;:
+       main()
+   ```
+
+   - Při nasazení do repa byste tento skript spustili jednorázově i opakovaně; díky kontrole existence je plně idempotentní.
 
 ---
 
-### Shrnutí konkrétních kroků pro vývojáře
+## 4. FIX report – očekávaný výsledek (pro ruční kontrolu)
 
-1. Otevři `.github/workflows/run-agent.yml`.
-2. Najdi step `name: Commit and push HTML reports + generated intents`.
-3. V `run: |` bloku:
-   - ponech všechny existující řádky pro HTML reporty, `git status`, `git commit`, `git push` beze změny,
-   - najdi řádek typu `git add data/intents/traffic_law/*.json`,
-   - tento *jeden* řádek nahraď blokem:
+Na základě aktuálně viditelné struktury (a předpokladu, že žádné další `intents/` ani README neexistují) by po spuštění výše uvedeného postupu měl report vypadat zhruba takto:
 
-     ```bash
-     if ls data/intents/traffic_law/*.json 1&gt; /dev/null 2&gt;&amp;1; then
-       git add data/intents/traffic_law/*.json
-     else
-       echo &quot;No generated traffic_law intents to add (directory or files not found).&quot;
-     fi
-     ```
+- **Počet nalezených domén**: 20
 
-4. Zkontroluj odsazení (4 mezery pod `run: |`) a validitu YAML.
-5. Pushni změnu a ověř v GitHub Actions:
-   - běh jobu v situaci bez `data/intents/traffic_law/*.json`,
-   - kontrolu logu stepu (obsahuje hlášku a step je `success`).
+- **created intents dir:**
+  - `school_law`
+  - `debt_law`
+  - `environmental_law`
+  - `property_construction_law`
+  - `social_law`
+  - `media_ip_law`
+  - `constitutional_law`
+  - `family_law`
+  - `data_digital_law`
+  - `labor_law`
+  - `health_law`
+  - `tax_law`
+  - `administrative_law`
+  - `inheritance_law`
+  - `criminal_law`
+  - `traffic_law` (u vás již existuje – zde záleží na skutečném stavu; `mkdir -p` nic nemění)
+  - `corporate_law`
+  - `civil_law`
+  - `consumer_finance_law`
+  - `international_law`
+
+- **created README:**
+  - `school_law`
+  - `debt_law`
+  - `environmental_law`
+  - `property_construction_law`
+  - `social_law`
+  - `media_ip_law`
+  - `constitutional_law`
+  - `family_law`
+  - `data_digital_law`
+  - `labor_law`
+  - `health_law`
+  - `tax_law`
+  - `administrative_law`
+  - `inheritance_law`
+  - `criminal_law`
+  - `traffic_law`
+  - `corporate_law`
+  - `civil_law`
+  - `consumer_finance_law`
+  - `international_law`
+
+Reálný report by se měl vygenerovat přímo skriptem (viz Python varianta výše), aby sloužil jako auditní stopa pro tento FIX.
+
+---
+
+## 5. Co může být v dalším kroku (mimo aktuální FIX)
+
+Není součástí tohoto úkolu, ale z hlediska architektury dat doporučuji pro budoucno:
+
+1. **Dokumentace standardu pro `data/_source/domains/*/intents`**
+   - Rozšířit `docs/README_datova_architektura.md` o kapitolu:
+     - kde se explicitně popíše, že:
+       - `data/_source/domains/&lt;domain&gt;/intents/*.json|*.yaml` jsou zdrojové definice,
+       - pipeline (např. `tools/generate_intents_from_yaml.py`) generuje z těchto dat sjednocené `data/intents/*.json` pro runtime.
+
+2. **Postupná migrace existujících `.json` v kořeni domén do `intents/`**
+   - Např. `labor_law/labor_termination.json` → `labor_law/intents/…`, ale to je samostatný úkol.
+
+Pokud potřebuješ, můžu v dalším kroku navrhnout přesnou konvenci názvů souborů a propojení s `tools/generate_intents_from_yaml.py`.
 ================================================================================
 Run type : FIX
-Timestamp (UTC) : 2025-11-29T17:46:37Z
+Timestamp (UTC) : 2025-11-29T18:30:02Z
 Task : Automatický bootstrap intentů pro traffic_law + sanity test
 ------------------------------------------------------------------------
 
