@@ -72,11 +72,16 @@ jobs:
           ts_safe = dt.strftime("%Y-%m-%d_%H%M") + "CET"
 
           # jen pro zobrazení v HTML, pokud je v textu
-          timestamp = "unknown"
-          for line in text.splitlines():
-              if line.startswith("Timestamp (UTC) :"):
-                  timestamp = line.split(":", 1)[1].strip()
-                  break
+          # Zkus z textu vytáhnout "Timestamp (UTC)" jen pro zobrazení v HTML
+timestamp = "unknown" for line in text.splitlines():
+    # oříznout bílé znaky na začátku/konci a znormalizovat case
+    normalized = line.strip()
+    if normalized.lower().startswith("timestamp (utc)"):
+        # najít první dvojtečku (funguje pro "Timestamp (UTC):" i "Timestamp (UTC) :")
+        parts = normalized.split(":", 1)
+        if len(parts) == 2:
+            timestamp = parts[1].strip()
+        break
 
           body = f"<pre>{html.escape(text)}</pre>"
 
