@@ -13,7 +13,7 @@ on:
         default: ""
 
 permissions:
-  contents: write   # aby mohl commitovat změny do repa
+  contents: write   # aby mohl commitovat změny
 
 jobs:
   run-agent:
@@ -40,23 +40,153 @@ jobs:
       - name: Run coding agent and save raw text report
         run: |
           mkdir -p tmp
-          # tady předáš task agentovi; přizpůsob si podle toho,
-          # jak coding_agent.py očekává vstup (argv / stdin)
           python coding_agent.py "${{ inputs.task }}" > tmp/last_report.txt
 
-      - name: Render HTML logs (analysis/fix/check) into docs/logs
+      - name: Wrap report into HTML for GitHub Pages (global + per-type logs)
         run: |
-          python tools/render_report_to_html.py \
-            --mode "${{ inputs.mode }}" \
-            --task "${{ inputs.task }}" \
-            --input tmp/last_report.txt
+          mkdir -p docs
+          python - << 'EOF'
+          from pathlib import Path
+          import html
 
-      - name: Commit and push HTML logs
+          raw_path = Path("tmp/last_report.txt")
+          text = raw_path.read_text(encoding="utf-8")
+
+          # --- detekce run typu a timestampu z prvních řádků ---
+          run_type = "GENERIC"
+          timestamp = "unknown"
+
+          for line in text.splitlines():
+              if line.startswith("Run type :"):
+                  run_type = line.split(":", 1)[1].strip()
+              elif line.startswith("Timestamp (UTC) :"):
+                  timestamp = line.split(":", 1)[1].strip()
+
+          # slug pro adresář: analysis / fix / check / generic
+          slug = run_type.lower().replace(" ", "_")
+          if slug == "":
+              slug = "generic"
+
+          # bezpečný timestamp pro název souboru
+          if timestamp == "unknown":
+              ts_safe = "unknown"
+          else:
+              # povolíme čísla, T, Z, -, _
+              ts_safe = "".join(c for c in timestamp if c.isdigit() or c in "TZ-_")
+
+          # HTML tělo
+          body = f"<pre>{html.escape(text)}</pre>"
+
+          # title – pro „last_report“ může být generický,
+          # per-type soubor dostane štítek s typem a časem
+          html_doc_global = f"""<!DOCTYPE html>
+          <html lang="cs">
+          <head>
+              <meta charset="UTF-8">
+              <title>Právní strážce – poslední report agenta</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                  body {{
+                      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                      margin: 2rem;
+                      line-height: 1.5;
+                      background: #0f172a;
+                      color: #e5e7eb;
+                  }}
+                  pre {{
+                      white-space: pre-wrap;
+                      word-wrap: break-word;
+                      background: #020617;
+                      padding: 1.5rem;
+                      border-radius: 0.75rem;
+                      border: 1px solid #1f2937;
+                      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                  }}
+                  h1 {{
+                      font-size: 1.5rem;
+                      margin-bottom: 1rem;
+                  }}
+                  .meta {{
+                      font-size: 0.85rem;
+                      color: #9ca3af;
+                      margin-bottom: 0.5rem;
+                  }}
+              </style>
+          </head>
+          <body>
+              <h1>Právní strážce – poslední report agenta</h1>
+              <div class="meta">
+                Tento soubor generuje GitHub Action z repozitáře catsystemexe/pravni-strazce.
+              </div>
+              {body}
+          </body>
+          </html>
+          """
+
+          html_doc_typed = f"""<!DOCTYPE html>
+          <html lang="cs">
+          <head>
+              <meta charset="UTF-8">
+              <title>Právní strážce – {run_type} run ({timestamp})</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                  body {{
+                      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                      margin: 2rem;
+                      line-height: 1.5;
+                      background: #0f172a;
+                      color: #e5e7eb;
+                  }}
+                  pre {{
+                      white-space: pre-wrap;
+                      word-wrap: break-word;
+                      background: #020617;
+                      padding: 1.5rem;
+                      border-radius: 0.75rem;
+                      border: 1px solid #1f2937;
+                      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                  }}
+                  h1 {{
+                      font-size: 1.5rem;
+                      margin-bottom: 1rem;
+                  }}
+                  .meta {{
+                      font-size: 0.85rem;
+                      color: #9ca3af;
+                      margin-bottom: 0.5rem;
+                  }}
+              </style>
+          </head>
+          <body>
+              <h1>Právní strážce – {run_type} run</h1>
+              <div class="meta">
+                Tento soubor generuje GitHub Action z repozitáře catsystemexe/pravni-strazce.
+                (UTC: {timestamp})
+              </div>
+              {body}
+          </body>
+          </html>
+          """
+
+          docs_dir = Path("docs")
+          docs_dir.mkdir(parents=True, exist_ok=True)
+
+          # 1) Globální poslední report
+          (docs_dir / "last_report.html").write_text(html_doc_global, encoding="utf-8")
+
+          # 2) Per-type logy: docs/analysis/, docs/fix/, docs/check/, ...
+          type_dir = docs_dir / slug
+          type_dir.mkdir(parents=True, exist_ok=True)
+
+          # timestampovaný soubor + latest.html
+          (type_dir / f"{ts_safe}.html").write_text(html_doc_typed, encoding="utf-8")
+          (type_dir / "latest.html").write_text(html_doc_typed, encoding="utf-8")
+          EOF
+
+      - name: Commit and push HTML reports
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/last_report.html docs/logs || echo "Nothing to add"
-          git commit -m "Update coding agent logs (${{
-            inputs.mode
-          }})" || echo "No changes to commit"
+          git add docs/last_report.html docs/*/*.html
+          git commit -m "Update agent HTML reports" || echo "No changes to commit"
           git push
