@@ -10,7 +10,7 @@ on:
       task:
         description: "Úkol pro coding agenta (česky)"
         required: true
-        default: "Úkol: analyzuj aktuální stav projektu"
+        default: ""
 
 permissions:
   contents: write   # aby mohl commitovat změny do repa
