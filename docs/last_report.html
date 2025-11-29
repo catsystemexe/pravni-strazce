@@ -44,270 +44,209 @@ ODPOVĚĎ CODING AGENTA:
 
 ## 1. Co chápu ze struktury projektu
 
-- Repo je core backend pro „Právní strážce“ s jasně oddělenými vrstvami:
-  - `engines/*` – funkční logika (intent, core_legal, risk, …).
-  - `runtime/*` – orchestrátor a pipeline.
-  - `llm/*`, `prompts/*`, `templates/*` – LLM a šablony výstupů.
-  - `data/` – datová vrstva:
-    - `data/intents/` – runtime JSON pro intent engine.
-    - `data/_source/` – zdrojová, „master“ data domén a intentů.
-    - `data/_source/_template/intent_template.json` – šablona pro nové intenty.
-    - `data/_source/domains/` – per‑doménová data (části mají už `intents/` podadresář, např. `traffic_law`).
-
-Tvůj konkrétní úkol je „FIX“ čistě v `data/_source/domains`: pro každou existující doménu zajistit
-- podadresář `intents/`
-- a v něm `README.md` placeholder (pokud neexistuje).
+- Jádro: AI framework „Právní strážce“ s orchestrátorem (`runtime/orchestrator.py`), enginy (`engines/*`) a společnými typy.
+- Domény a intent data:
+  - Zdrojová data domén jsou v `data/_source/domains/&lt;domain&gt;/...` (např. `traffic_law` už má rozpadlé intents).
+  - Validace a generování runtime intentů probíhá přes nástroje v `tools/` (`generate_intents_from_yaml.py`, `validate_intents.py` atd.).
+  - Runtime engine pro intenty (`engines/intent`) načítá JSON soubory z `data/intents/**` a používá je pro heuristickou klasifikaci.
+- Pravidla domén (`engines/domain_rules/*.yaml`) jsou dnes jen pro část českých domén (civil, správní, rodinné, apod.).
+- LLM podpora je v `llm/`, výstupní šablony v `templates/`, produktové konfigurace v `product/`.
+- V adresáři `data/` zatím chybí `data/intents/` (resp. není vylistován žádný obsah), což je důležité pro intent engine a aktuální úkol.
 
 ---
 
-## 2. Analýza konkrétní situace v `data/_source/domains`
+## 2. Konkrétní návrh kroků pro splnění úkolu (.keep, adresáře, idempotence)
 
-Z výpisu struktury vyplývá, že aktuálně existují tyto doménové složky:
+Tyto kroky jsou pro vývojáře – ty máš provést v repozitáři (ručně nebo skriptem). Já soubory nevytvářím.
 
-1. `school_law`
-2. `debt_law`
-3. `environmental_law`
-4. `property_construction_law`
-5. `social_law`
-6. `media_ip_law`
-7. `constitutional_law`
-8. `family_law`
-9. `data_digital_law`
-10. `labor_law`
-    - má soubor `labor_termination.json` přímo v kořeni domény
-    - nemá podadresář `intents/` (v seznamu nevidím)
-11. `health_law`
-12. `tax_law`
-13. `administrative_law`
-    - má `appeal_admin_decision.json` v kořeni domény
-14. `inheritance_law`
-15. `criminal_law`
-    - má `criminal_defense.json` v kořeni domény
-16. `traffic_law`
-    - má `domain.yaml`, `subdomains.yaml`, `readme.md`
-    - má `intents/` s více JSON soubory (již ve správné cílové struktuře)
-17. `corporate_law`
-18. `civil_law`
-19. `consumer_finance_law`
-    - má `consumer_credit.json` v kořeni domény
-20. `international_law`
+### 2.1 Přehled požadovaného výsledku
 
-Z toho plyne:
+- Musí existovat adresář:
+  - `data/intents/`
+- Pro každou doménu musí existovat:
+  - adresář `data/intents/&lt;domain&gt;/`
+  - prázdný soubor `data/intents/&lt;domain&gt;/.keep` (0 bajtů)
+- Operace má být idempotentní – tedy opakované spuštění nic nerozbije:
+  - adresáře, které už existují, se nemění,
+  - `.keep`, pokud existuje, se nepřepisuje.
 
-- Požadavek 1 (najít domény) je jasný: pracujeme přesně s těmito 20 složkami.
-- Požadavek 2–3: `traffic_law` už `intents/` má, ostatní zatím ne (minimálně nejsou ve výpisu).
-- U žádné domény kromě `traffic_law` nevidím `intents/` – tedy je velmi pravděpodobné, že je potřeba je vytvořit pro 19 domén.
-- V žádném `intents/` kromě `traffic_law` (a ani tam) nevidím README, tzn.:
-  - pro `traffic_law/intents/` ověřit existenci `README.md` – ve výpisu není, takže jej bude třeba vytvořit,
-  - pro nově zakládané `intents/` u ostatních domén také založit `README.md`.
+### 2.2 Doporučený postup (shell / Unix)
 
-Co mi chybí / co je potřeba si na straně vývojáře ověřit při implementaci:
-- Zda se na disku skutečně nenachází nějaké `intents/` podadresáře nebo README, které nejsou ve zkráceném výpisu (ale podle poskytnuté struktury budeme vycházet z toho, že nejsou).
-
----
-
-## 3. Návrh konkrétních kroků pro vývojáře
-
-### 3.1. Vytvoření standardizované struktury domén (`intents/` + README)
-
-1. **Vylistovat existující domény**
-
-   Na rootu repa:
+1. Vytvořit root adresář pro runtime intenty:
 
    ```bash
-   cd path/to/repo
-
-   ls data/_source/domains
+   mkdir -p data/intents
    ```
 
-   Očekávaný seznam (musí odpovídat výpisu, ale bere se reálný stav disku):
-
-   - `school_law`
-   - `debt_law`
-   - `environmental_law`
-   - `property_construction_law`
-   - `social_law`
-   - `media_ip_law`
-   - `constitutional_law`
-   - `family_law`
-   - `data_digital_law`
-   - `labor_law`
-   - `health_law`
-   - `tax_law`
-   - `administrative_law`
-   - `inheritance_law`
-   - `criminal_law`
-   - `traffic_law`
-   - `corporate_law`
-   - `civil_law`
-   - `consumer_finance_law`
-   - `international_law`
-
-2. **Pro každou doménu zajistit adresář `intents/` (idempotentně)**
-
-   V shellu lze použít:
+2. Definovat seznam domén (přesně dle zadání):
 
    ```bash
-   for d in data/_source/domains/*; do
-       [ -d &quot;$d&quot; ] || continue
-       mkdir -p &quot;$d/intents&quot;
+   DOMAINS=(
+     school_law
+     debt_law
+     environmental_law
+     property_construction_law
+     social_law
+     media_ip_law
+     constitutional_law
+     family_law
+     data_digital_law
+     labor_law
+     health_law
+     tax_law
+     administrative_law
+     inheritance_law
+     criminal_law
+     traffic_law
+     corporate_law
+     civil_law
+     consumer_finance_law
+     international_law
+   )
+   ```
+
+3. Pro každou doménu zajistit adresář a `.keep`, idempotentně:
+
+   ```bash
+   for d in &quot;${DOMAINS[@]}&quot;; do
+     # 1) založit adresář domény
+     mkdir -p &quot;data/intents/$d&quot;
+
+     # 2) pokud .keep neexistuje, vytvořit prázdný soubor
+     if [ ! -f &quot;data/intents/$d/.keep&quot; ]; then
+       # POSIX-safe vytvoření prázdného souboru
+       : &gt; &quot;data/intents/$d/.keep&quot;
+     fi
    done
    ```
 
-   - `mkdir -p` je idempotentní – opakované spuštění nemění existující strukturu.
+   - `mkdir -p` je idempotentní (nevadí opakované volání).
+   - `: &gt; file` vytvoří nový prázdný soubor; díky `if [ ! -f ... ]` se to spustí jen pokud soubor neexistuje (aby se nic nepřepisovalo).
 
-3. **Vytvořit README.md placeholder tam, kde chybí**
+### 2.3 Doporučený Python skript (např. do `tools/fix_create_intent_runtime_dirs.py`)
 
-   Skript v shellu:
+Pokud chcete mít fix jako maintainable nástroj:
 
-   ```bash
-   for d in data/_source/domains/*; do
-       [ -d &quot;$d&quot; ] || continue
-       intents_dir=&quot;$d/intents&quot;
-       readme=&quot;$intents_dir/README.md&quot;
-
-       if [ ! -f &quot;$readme&quot; ]; then
-           domain_code=&quot;$(basename &quot;$d&quot;)&quot;
-           cat &gt; &quot;$readme&quot; &lt;&lt;EOF
-# Intenty pro doménu ${domain_code}
-
-Tento adresář je určen pro zdrojové definice intentů domény ${domain_code} ve formátu JSON/YAML. Zatím zde nejsou žádné konkrétní intent definice – jde pouze o placeholder pro budoucí práci.
-EOF
-       fi
-   done
-   ```
-
-   - Podmínka `if [ ! -f &quot;$readme&quot; ]` zajistí, že případné existující README se **nepřepíše**.
-   - Obsah je sjednocený s textem z úkolu (pouze dosazen `&lt;domain_code&gt;`).
-
-4. **Nezasahovat mimo `data/_source/domains`**
-
-   - Nepřesouvat existující `.json` soubory (`labor_termination.json`, `criminal_defense.json` atd.) – úkol se výslovně omezuje jen na vytvoření adresářů a README placeholderů.
-   - Nic neměnit v `data/intents/`, `engines/`, `runtime/`, `docs/` atd.
-   - Nesahej na `domain.yaml`, `subdomains.yaml` či existující intent JSON/YAML.
-
-5. **(Volitelně) Připravit malý Python util skript pro opakované použití**
-
-   Pokud preferujete Python:
+1. Vytvořit skript (návrh obsahu):
 
    ```python
-   # tools/fix_domains_intents_dirs.py  (návrh umístění)
-
+   # tools/fix_create_intent_runtime_dirs.py
+   from __future__ import annotations
+   import os
    from pathlib import Path
 
-   ROOT = Path(__file__).resolve().parents[1]
-   DOMAINS_ROOT = ROOT / &quot;data&quot; / &quot;_source&quot; / &quot;domains&quot;
+   REPO_ROOT = Path(__file__).resolve().parents[1]
+   BASE_DIR = REPO_ROOT / &quot;data&quot; / &quot;intents&quot;
+
+   DOMAINS = [
+       &quot;school_law&quot;,
+       &quot;debt_law&quot;,
+       &quot;environmental_law&quot;,
+       &quot;property_construction_law&quot;,
+       &quot;social_law&quot;,
+       &quot;media_ip_law&quot;,
+       &quot;constitutional_law&quot;,
+       &quot;family_law&quot;,
+       &quot;data_digital_law&quot;,
+       &quot;labor_law&quot;,
+       &quot;health_law&quot;,
+       &quot;tax_law&quot;,
+       &quot;administrative_law&quot;,
+       &quot;inheritance_law&quot;,
+       &quot;criminal_law&quot;,
+       &quot;traffic_law&quot;,
+       &quot;corporate_law&quot;,
+       &quot;civil_law&quot;,
+       &quot;consumer_finance_law&quot;,
+       &quot;international_law&quot;,
+   ]
 
    def main() -&gt; None:
-       created_dirs = []
-       created_readmes = []
+       # 1) data/intents/
+       BASE_DIR.mkdir(parents=True, exist_ok=True)
 
-       for domain_dir in DOMAINS_ROOT.iterdir():
-           if not domain_dir.is_dir():
-               continue
+       for dom in DOMAINS:
+           dom_dir = BASE_DIR / dom
+           keep_path = dom_dir / &quot;.keep&quot;
 
-           intents_dir = domain_dir / &quot;intents&quot;
-           if not intents_dir.exists():
-               intents_dir.mkdir(parents=True, exist_ok=True)
-               created_dirs.append(domain_dir.name)
+           # 2) adresář domény (idempotentní)
+           dom_dir.mkdir(exist_ok=True)
 
-           readme = intents_dir / &quot;README.md&quot;
-           if not readme.exists():
-               content = (
-                   f&quot;# Intenty pro doménu {domain_dir.name}\n\n&quot;
-                   f&quot;Tento adresář je určen pro zdrojové definice intentů &quot;
-                   f&quot;domény {domain_dir.name} ve formátu JSON/YAML. &quot;
-                   f&quot;Zatím zde nejsou žádné konkrétní intent definice – jde &quot;
-                   f&quot;pouze o placeholder pro budoucí práci.\n&quot;
-               )
-               readme.write_text(content, encoding=&quot;utf-8&quot;)
-               created_readmes.append(domain_dir.name)
-
-       # Jednoduchý report do stdout
-       print(f&quot;Domains found: {len(list(DOMAINS_ROOT.iterdir()))}&quot;)
-       print(&quot;created intents dir:&quot;, &quot;, &quot;.join(created_dirs) or &quot;(none)&quot;)
-       print(&quot;created README:&quot;, &quot;, &quot;.join(created_readmes) or &quot;(none)&quot;)
-
+           # 3) .keep – vytvořit jen pokud neexistuje
+           if not keep_path.exists():
+               keep_path.touch()  # vytvoří 0-byte soubor
 
    if __name__ == &quot;__main__&quot;:
        main()
    ```
 
-   - Při nasazení do repa byste tento skript spustili jednorázově i opakovaně; díky kontrole existence je plně idempotentní.
+2. Spuštění z rootu projektu:
+
+   ```bash
+   python tools/fix_create_intent_runtime_dirs.py
+   ```
+
+3. Ověření:
+
+   ```bash
+   ls -R data/intents
+   # a případně velikost .keep
+   find data/intents -name &quot;.keep&quot; -exec ls -l {} \;
+   ```
 
 ---
 
-## 4. FIX report – očekávaný výsledek (pro ruční kontrolu)
+## 3. Návrhy na vylepšení architektury / dokumentace kolem intentů a domén
 
-Na základě aktuálně viditelné struktury (a předpokladu, že žádné další `intents/` ani README neexistují) by po spuštění výše uvedeného postupu měl report vypadat zhruba takto:
+### 3.1 Propojení `_source` a runtime `data/intents/`
 
-- **Počet nalezených domén**: 20
+- Dnes:
+  - zdrojové definice v `data/_source/domains/&lt;domain&gt;/**`,
+  - runtime adresář `data/intents/` je čtecí endpoint pro `engines/intent.loader`.
+- Doporučení:
+  1. Do `docs/intent.system.md` doplnit sekci „Runtime adresáře intentů“:
+     - vysvětlit, že `data/intents/&lt;domain&gt;/*.json` vznikají generováním z `_source` nebo bootstrap skriptů,
+     - že `.keep` drží prázdné domény v gitu, dokud nejsou definované první JSONy.
+  2. Do `tools/generate_intents_from_yaml.py` (a podobných) přidat konstantu/konfiguraci pro `BASE_RUNTIME_INTENTS_DIR = data/intents` a explicitně zkontrolovat, zda doménový adresář existuje; pokud ne, vytvořit ho (respektuje tímto fix).
 
-- **created intents dir:**
-  - `school_law`
-  - `debt_law`
-  - `environmental_law`
-  - `property_construction_law`
-  - `social_law`
-  - `media_ip_law`
-  - `constitutional_law`
-  - `family_law`
-  - `data_digital_law`
-  - `labor_law`
-  - `health_law`
-  - `tax_law`
-  - `administrative_law`
-  - `inheritance_law`
-  - `criminal_law`
-  - `traffic_law` (u vás již existuje – zde záleží na skutečném stavu; `mkdir -p` nic nemění)
-  - `corporate_law`
-  - `civil_law`
-  - `consumer_finance_law`
-  - `international_law`
+### 3.2 Validace doménového katalogu vs runtime dirs
 
-- **created README:**
-  - `school_law`
-  - `debt_law`
-  - `environmental_law`
-  - `property_construction_law`
-  - `social_law`
-  - `media_ip_law`
-  - `constitutional_law`
-  - `family_law`
-  - `data_digital_law`
-  - `labor_law`
-  - `health_law`
-  - `tax_law`
-  - `administrative_law`
-  - `inheritance_law`
-  - `criminal_law`
-  - `traffic_law`
-  - `corporate_law`
-  - `civil_law`
-  - `consumer_finance_law`
-  - `international_law`
+- V `data/schema/domains.json` pravděpodobně existuje master seznam domén (není vypsán obsah).
+- Doporučení:
+  1. Vytvořit v `tools/validate_data.py` check:
+     - pro každou doménu v `domains.json`:
+       - existuje `data/_source/domains/&lt;domain&gt;`?
+       - existuje `data/intents/&lt;domain&gt;` a `.keep` nebo alespoň adresář?
+  2. V CI (pokud existuje) spouštět `python tools/validate_data.py` a failnout, pokud chybí adresář pro nějakou doménu (pomáhá předcházet regresím typu „nová doména v katalogu, ale nejsou runtime dirs“).
 
-Reálný report by se měl vygenerovat přímo skriptem (viz Python varianta výše), aby sloužil jako auditní stopa pro tento FIX.
+### 3.3 Úprava intent engine dokumentace
+
+- `engines/intent/loader.py` a `engines/intent/engine.py` spoléhají na `data/intents/**.json`.
+- Návrhy:
+  1. V `docs/intent.system.md` doplnit:
+     - „Intent engine čte pouze JSON soubory v `data/intents/**`; absence adresáře domény znamená, že heuristika pro tuto doménu zatím nebude mít žádné signály.“
+  2. Do `engines/intent/loader.py` doplnit krátký modul-level docstring s popisem:
+     - kde očekává soubory,
+     - že prázdné doménové adresáře s `.keep` jsou v pořádku (jen žádné intenty nenajde).
 
 ---
 
-## 5. Co může být v dalším kroku (mimo aktuální FIX)
+## 4. Co není (z tohoto výpisu) úplně jasné
 
-Není součástí tohoto úkolu, ale z hlediska architektury dat doporučuji pro budoucno:
+1. Obsah `data/schema/domains.json`:
+   - není vidět, jak přesně jsou domény pojmenované (předpokládám shodu s názvy složek).
+   - pro 100% robustní nástroj by bylo dobré čerpat seznam domén právě z tohoto JSONu, ne z hard-coded listu.
 
-1. **Dokumentace standardu pro `data/_source/domains/*/intents`**
-   - Rozšířit `docs/README_datova_architektura.md` o kapitolu:
-     - kde se explicitně popíše, že:
-       - `data/_source/domains/&lt;domain&gt;/intents/*.json|*.yaml` jsou zdrojové definice,
-       - pipeline (např. `tools/generate_intents_from_yaml.py`) generuje z těchto dat sjednocené `data/intents/*.json` pro runtime.
+2. Napojení generátorů:
+   - `tools/generate_intent_from_domains.py` a `tools/bootstrap_traffic_law_intents.py` – není jasné, jak přesně se dnes používají a zda očekávají existenci `data/intents/&lt;domain&gt;/`.
+   - doporučuji po implementaci tohoto fixu tyto skripty otevřít a případně:
+     - doplnit `mkdir -p data/intents/&lt;domain&gt;` před zápisem,
+     - nebo parametrizovat výstupní cestu.
 
-2. **Postupná migrace existujících `.json` v kořeni domén do `intents/`**
-   - Např. `labor_law/labor_termination.json` → `labor_law/intents/…`, ale to je samostatný úkol.
-
-Pokud potřebuješ, můžu v dalším kroku navrhnout přesnou konvenci názvů souborů a propojení s `tools/generate_intents_from_yaml.py`.
+Pokud dodáš obsah `data/schema/domains.json` a případně ukázku některého z `tools/generate_*.py`, můžu navrhnout ještě přesnější úpravy, aby se fix plně integroval do celého data-pipeline.
 ================================================================================
 Run type : FIX
-Timestamp (UTC) : 2025-11-29T18:30:02Z
+Timestamp (UTC) : 2025-11-29T18:57:09Z
 Task : Automatický bootstrap intentů pro traffic_law + sanity test
 ------------------------------------------------------------------------
 
