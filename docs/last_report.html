@@ -42,142 +42,106 @@
     <pre>================================================================================
 ODPOVĚĎ CODING AGENTA:
 
-## 1. Co chápu ze struktury projektu
-
-- Projekt je jádro backendového frameworku „Právní strážce“.
-- Logika je rozdělená do engine modulů (core_legal, judikatura, intent, risk, safety, domain_rules, …), orchestraci řeší `runtime.orchestrator`.
-- Domény a intenty:
-  - Doménová metadata a zdrojové intent definice jsou v `data/_source/domains/...`.
-  - Runtime verze intent definic pro klasifikaci se očekávají v `data/intents/*.json` (to používá `engines/intent/loader.py`).
-  - Pro traffic law už existují zdrojové YAML/JSON soubory pod `data/_source/domains/traffic_law/...`.
-  - Jsou k dispozici nástroje pro generování / validaci intentů (`tools/generate_intents_from_yaml.py`, `tools/bootstrap_traffic_law_intents.py`, `tools/validate_intents.py` atd.).
-- Testy:
-  - Existují integrační testy pro orchestrátor, domain_rules, judikaturu, core_legal, ale zatím žádný runtime test pro intent loader.
-- `engines/intent/loader.py`:
-  - Načítá JSONy z `data/intents/**`.
-  - Normalizuje je (_normalize_raw) na strukturu `IntentDefinition`.
-- `IntentDefinition` v `engines/intent/definition.py` má pole `domain` i `intent_group`, takže přes něj můžeme kontrolovat doménové pokrytí.
+- Chápu, že projekt je jádrem rámce „Právní strážce“ s modulární architekturou:
+  - `runtime` orchestruje enginy.
+  - Různé `engines/*` řeší dílčí úlohy (core_legal, judikatura, risk, intent…).
+  - Doménová a intent data jsou v `data/_source/...` a pravděpodobně se generují do runtime struktury (`data/intents`, `data/schema/...`).
+  - Pro intents existuje engine (`engines/intent/engine.py`) a loader (`engines/intent/loader.py`), který čte JSONy z `data/intents`.
+  - Testy v `tests/` validují orchestrátor, domain rules, core_legal, generování intentů z YAML atd.
 
 ---
 
-## 2. Konkrétní návrh kroků k úkolu (test pro `load_intents()`)
+## 1. Nejasnosti / chybějící kontext
 
-### 2.1. Minimální pomocný skript / runtime ověření
+- V repu není vypsán obsah adresáře `data/intents/` (jen `_source`), ale:
+  - `tools/generate_intents_from_yaml.py` a `tools/bootstrap_traffic_law_intents.py` naznačují, že se z `_source/domains/...` generují runtime JSONy právě do `data/intents`.
+  - Test, který máš vytvořit, má jen ověřit, že něco existuje, a že mezi doménami je `traffic_law`. To znamená:
+    - Předpokládá se, že v CI buď běží generátor před testy, nebo už je `data/intents` verzovaná v Gitu.
+- Nemám teď obsah `tests/test_intent_loader_runtime_minimal.py` (jestli už existuje, nebo je nový).
 
-Pro rychlou manuální kontrolu (mimo testy) lze navrhnout jednoduchý skript do `engines/intent/loader.py` jako spustitelný blok pod `if __name__ == &quot;__main__&quot;:`:
-
-1. Na konec `engines/intent/loader.py` přidat:
-
-   ```python
-   if __name__ == &quot;__main__&quot;:
-       intents = load_intents()
-       print(f&quot;Načteno intentů: {len(intents)}&quot;)
-
-       domains = sorted({i.domain for i in intents})
-       print(&quot;Domény v načtených intentech:&quot;)
-       for d in domains:
-           print(f&quot; - {d}&quot;)
-   ```
-
-   Tím se dá ručně ověřit:
-   - že `load_intents()` vrací nenulový seznam (výpis počtu),
-   - kolik intentů načte,
-   - jaké hodnoty `domain` existují.
-
-   To je čistě pomocné, nemění chování importu ani testů.
-
-&gt; Pokud nechcete upravovat production kód vůbec, lze totéž udělat jako malý standalone skript v `tools/` (např. `tools/debug_intent_loader.py`) – ale zadání dovoluje doplnit „minimální pomocný skript (nebo test)“, takže blok `__main__` v loaderu je v souladu.
+To není blokující; test lze napsat tak, aby selhal pouze v případě, že:
+- `load_intents()` vrací prázdný seznam nebo
+- mezi `domain` hodnotami není `traffic_law`.
 
 ---
 
-### 2.2. Test `tests/test_intent_loader_runtime_minimal.py`
+## 2. Konkrétní návrh změn v rámci úkolu
 
-Soubor zatím v testech není, takže navrhuji ho vytvořit / aktualizovat přesně podle zadání:
+### 2.1. Pomocný test: `tests/test_intent_loader_runtime_minimal.py`
 
-1. Vytvořit `tests/test_intent_loader_runtime_minimal.py` s tímto obsahem:
+Cíl:
+- Importovat `load_intents` z `engines.intent.loader`.
+- Zavolat `load_intents()`.
+- Ověřit:
+  - že seznam je neprázdný,
+  - že `traffic_law` je mezi hodnotami `domain`.
 
-   ```python
-   from engines.intent.loader import load_intents
+Navrhovaný obsah souboru (přepsat / vytvořit):
+
+```python
+# tests/test_intent_loader_runtime_minimal.py
+
+from engines.intent.loader import load_intents
 
 
-   def test_load_intents_basic_runtime():
-       # 1) Načtení intentů
-       intents = load_intents()
+def test_load_intents_returns_non_empty_list_and_contains_traffic_law():
+    intents = load_intents()
 
-       # 2) Musí vrátit nenulový seznam
-       assert isinstance(intents, list)
-       assert len(intents) &gt; 0, &quot;load_intents by měl vracet alespoň jeden intent&quot;
+    # 1) musí vrátit neprázdný seznam
+    assert isinstance(intents, list)
+    assert len(intents) &gt; 0, &quot;load_intents() by měl načíst alespoň jeden intent&quot;
 
-       # 3) Získání domén ze všech načtených intentů
-       domains = {intent.domain for intent in intents}
+    # 2) zjistit domény z načtených IntentDefinition
+    domains = {intent.domain for intent in intents}
 
-       # 4) Musí existovat traffic_law mezi doménami
-       assert (
-           &quot;traffic_law&quot; in domains
-       ), f&quot;Mezi doménami načtených intentů by měla být i &#x27;traffic_law&#x27;, ale domény jsou: {sorted(domains)}&quot;
-   ```
+    # 3) ověřit, že mezi doménami je &#x27;traffic_law&#x27;
+    assert &quot;traffic_law&quot; in domains, (
+        &quot;Mezi načtenými intents by měla být doména &#x27;traffic_law&#x27;. &quot;
+        &quot;Zkontroluj, zda jsou v data/intents vygenerovány traffic_law JSONy.&quot;
+    )
+```
 
-   Vysvětlení:
-   - Importuje `load_intents` z `engines.intent.loader`.
-   - Zavolá `load_intents()`.
-   - Assertuje, že:
-     - návratová hodnota je list,
-     - délka listu &gt; 0.
-   - Získá množinu `domain` z načtených `IntentDefinition`.
-   - Assertuje, že `&quot;traffic_law&quot;` je v množině domén.
-   - Chybová hláška vypíše aktuální domény pro snazší debug, pokud by test selhal (např. pokud nejsou vygenerované `data/intents/traffic_law_*.json`).
-
-2. V rámci CI / lokálně:
-   - Před spuštěním testu je potřeba mít vygenerované runtime intent JSONy:
-     - buď ručně pomocí vhodného nástroje (např. `python tools/bootstrap_traffic_law_intents.py` nebo `python tools/generate_intents_from_yaml.py` – podle aktuálního workflow projektu),
-     - nebo mít už verzované JSONy v `data/intents/`.
-   - Pokud se spoléháte jen na `_source`, test by padal; proto je vhodné mít jasně zdokumentováno, že `data/intents` má být součástí repozitáře či build kroku.
+Tento test:
+- nepoužívá žádné vedlejší efekty,
+- nevyžaduje žádnou další konfiguraci, jen existenci `data/intents` s alespoň jedním JSONem, který má `domain=&quot;traffic_law&quot;`.
 
 ---
 
-## 3. Architektura / domény / intents – drobná doporučení vyplývající z úkolu
+## 3. Drobný komentář k architektuře intent loaderu
 
-1. **Jasný „build step“ pro intenty:**
-   - V dokumentaci (`docs/intent.system.md` nebo `docs/README_datova_architektura.md`) uveďte sekci:
-     - jak se generuje `data/intents` z `data/_source/domains/**`,
-     - jaký příkaz je potřeba spustit před testy.
-   - Příklad:  
-     „Před spuštěním testů: `python tools/generate_intents_from_yaml.py` (nebo odpovídající skript), který vytvoří/aktualizuje `data/intents/*.json`.“
+Zadání výslovně říká „Nic jiného v projektu neměň“, takže změny do `engines/intent/loader.py` nebudu navrhovat jako povinné, jen jako doporučení do budoucna:
 
-2. **Validace konzistence domén:**
-   - Do existujících validačních nástrojů (`tools/validate_intents.py`) doplnit check, že:
-     - všechny `IntentDefinition.domain` existují v master seznamu domén (`data/schema/domains.json` nebo runtime/domain_catalog.py),
-     - tím se zachytí překlepy a zaručí, že test typu „mezi doménami je traffic_law“ má smysl.
+1. **BASE_DIR relativně vůči rootu**  
+   - Dnes: `BASE_DIR = os.path.join(&quot;data&quot;, &quot;intents&quot;)`.  
+   - To spoléhá na current working directory. Robustnější by bylo odvíjet cestu od `__file__` nebo od centrální konstanty (`REPO_ROOT` v `coding_agent.py` ukazuje, jak to děláte jinde).
 
-3. **Oddělení runtime vs. source dat:**
-   - V dokumentaci krátce vyjasnit:
-     - `_source` = autoritativní zdroj (YAML/JSON), vhodný pro editaci domén a intentů,
-     - `data/intents` = runtime materializovaná podoba, kterou načítá `intent_engine`.
+2. **Volitelný parametr pro vlastní cestu**  
+   - Pro testování by se hodilo, aby `load_intents(base_dir: str | Path = BASE_DIR)` umožnil testům mířit na fixture adresář, ale zadání explicitně omezuje změny, takže teď jen doporučení.
+
+3. **Lepší logování chyb**  
+   - Místo `print` by se později mohlo použít `logging`, případně sběr statistik (kolik souborů, kolik chyb).
 
 ---
 
-## 4. Co není jasné a co by stálo za upřesnění
+## 4. Doporučené kroky pro vývojáře
 
-1. **Jak přesně vzniká `data/intents`:**
-   - Je to:
-     - plně verzované v Gitu, nebo
-     - generované v CI při build kroku, nebo
-     - generované ad-hoc lokálně?
-   - Od toho se odvíjí:
-     - zda testy mají spoléhat na existující soubory v repozitáři, nebo
-     - jestli by měly předem (v `conftest.py` nebo v CI skriptu) volat generovací nástroj.
+1. **Zkontrolovat stav `data/intents` v repozitáři**  
+   - Ověřit, zda jsou JSONy s `domain: &quot;traffic_law&quot;` verzované a dostupné při běhu testů.  
+   - Pokud ne, zajistit, aby CI před testy spouštěla např. `python tools/generate_intents_from_yaml.py` nebo `python tools/bootstrap_traffic_law_intents.py`.
 
-2. **Kanonický nástroj pro generování traffic_law intentů:**
-   - V `tools/` je více skriptů – není zřejmé, který je „ten pravý“ pro traffic_law:
-     - `tools/bootstrap_traffic_law_intents.py`
-     - `tools/generate_intents_from_yaml.py`
-   - Doporučení: v dokumentaci jasně označit:
-     - „Toto je hlavní nástroj pro generování runtime intentů ze zdrojových YAML/JSON.“
+2. **Vytvořit / upravit `tests/test_intent_loader_runtime_minimal.py`**  
+   - Použít výše uvedený obsah.  
+   - Spustit `pytest -k intent_loader_runtime_minimal` a zkontrolovat, že:
+     - test proběhne bez chyb,
+     - v případě prázdného `data/intents` dává srozumitelné chybové hlášení.
 
-Pokud tyto dvě věci upřesníte, můžu navrhnout i konkrétní hook do CI / test setupu (bez úprav produkčního kódu), který zajistí, že `tests/test_intent_loader_runtime_minimal.py` bude vždy běhat nad aktuální sadou intentů.
+3. **(Volitelně do budoucna) Centralizovat kořen dat**  
+   - Zvážit zavedení modulu typu `runtime.paths` nebo konfigurace v `runtime/config_loader.py`, která bude určovat, kde jsou runtime data (`data/intents`, `data/schema`, `data/_source`), aby se cesty nemusely skládat ručně v každém engine.
+
+Pokud mi poskytneš obsah případného stávajícího `tests/test_intent_loader_runtime_minimal.py` nebo strukturu `data/intents`, mohu návrh testu ještě přesněji sladit s aktuálním stylem projektu (např. použití fixtur v `conftest.py`).
 ================================================================================
 Run type : FIX
-Timestamp (UTC) : 2025-11-29T17:13:06Z
+Timestamp (UTC) : 2025-11-29T17:41:29Z
 Task : Automatický bootstrap intentů pro traffic_law + sanity test
 ------------------------------------------------------------------------
 
