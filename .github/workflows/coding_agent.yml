@@ -41,13 +41,13 @@ jobs:
         run: |
           mkdir -p tmp
           python coding_agent.py "${{ inputs.task }}" > tmp/last_report.txt
-    
+
       - name: Apply FIX script (traffic_law intents)
         if: ${{ inputs.mode == 'fix' }}
         run: |
           # append výstup fix skriptu za report coding agenta
           python tools/fix_intent_pipeline_v1.py >> tmp/last_report.txt
-    
+
       - name: Wrap report into HTML for GitHub Pages (global + per-type logs)
         env:
           RUN_MODE: ${{ inputs.mode }}
@@ -77,23 +77,58 @@ jobs:
           dt = datetime.now(cet)
           ts_safe = dt.strftime("%Y-%m-%d_%H%M") + "CET"
 
-          # jen pro zobrazení v HTML, pokud je v textu
           # Zkus z textu vytáhnout "Timestamp (UTC)" jen pro zobrazení v HTML
-timestamp = "unknown" for line in text.splitlines():
-    # oříznout bílé znaky na začátku/konci a znormalizovat case
-    normalized = line.strip()
-    if normalized.lower().startswith("timestamp (utc)"):
-        # najít první dvojtečku (funguje pro "Timestamp (UTC):" i "Timestamp (UTC) :")
-        parts = normalized.split(":", 1)
-        if len(parts) == 2:
-            timestamp = parts[1].strip()
-        break
+          timestamp = "unknown"
+          for line in text.splitlines():
+              # oříznout bílé znaky na začátku/konci a znormalizovat case
+              normalized = line.strip()
+              if normalized.lower().startswith("timestamp (utc)"):
+                  # najít první dvojtečku (funguje pro "Timestamp (UTC):" i "Timestamp (UTC) :")
+                  parts = normalized.split(":", 1)
+                  if len(parts) == 2:
+                      timestamp = parts[1].strip()
+                  break
 
           body = f"<pre>{html.escape(text)}</pre>"
 
+          css_block = """
+                  body {
+                      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                      margin: 2rem;
+                      line-height: 1.5;
+                      background: #0f172a;
+                      color: #e5e7eb;
+                  }
+                  pre {
+                      white-space: pre-wrap;
+                      word-wrap: break-word;
+                      background: #020617;
+                      padding: 1.5rem;
+                      border-radius: 0.75rem;
+                      border: 1px solid #1f2937;
+                      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                  }
+                  h1 {
+                      font-size: 1.5rem;
+                      margin-bottom: 1rem;
+                  }
+                  .meta {
+                      font-size: 0.85rem;
+                      color: #9ca3af;
+                      margin-bottom: 0.5rem;
+                  }
+          """
+
           html_doc_global = f"""<!DOCTYPE html>
           <html lang="cs">
-          <head> ... stejné CSS ... </head>
+          <head>
+              <meta charset="UTF-8">
+              <title>Právní strážce – poslední report agenta</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+              {css_block}
+              </style>
+          </head>
           <body>
               <h1>Právní strážce – poslední report agenta</h1>
               <div class="meta">
@@ -106,7 +141,14 @@ timestamp = "unknown" for line in text.splitlines():
 
           html_doc_typed = f"""<!DOCTYPE html>
           <html lang="cs">
-          <head> ... stejné CSS ... </head>
+          <head>
+              <meta charset="UTF-8">
+              <title>Právní strážce – {run_type} run ({timestamp})</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+              {css_block}
+              </style>
+          </head>
           <body>
               <h1>Právní strážce – {run_type} run</h1>
               <div class="meta">
