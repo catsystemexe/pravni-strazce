@@ -18,7 +18,7 @@
     "Německo mi poslalo dopis ohledně rychlosti.",
     "Může zahraniční pokuta přijít až po několika měsících?"
   ],
-  "intent_id": "traffic_speed_offense_abroad",
+  "intent_id": "traffic_law_traffic_speed_offense_abroad",
   "keywords": [
     "pokuta z Rakouska",
     "pokuta z Německa",

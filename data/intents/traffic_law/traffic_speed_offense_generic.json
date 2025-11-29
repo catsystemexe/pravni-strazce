@@ -18,7 +18,7 @@
     "Jel jsem 150 na dálnici, jaká je za to pokuta a body?",
     "Policie mi řekla, že jsem jel moc rychle, ale přesně nevím o kolik."
   ],
-  "intent_id": "traffic_speed_offense_generic",
+  "intent_id": "traffic_law_traffic_speed_offense_generic",
   "keywords": [
     "překročení rychlosti",
     "prekroceni rychlosti",

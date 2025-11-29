@@ -18,7 +18,7 @@
     "Na fotce není moje SPZ, ale přišlo mi oznámení.",
     "Je možné napadnout měření radarem kvůli chybějící kalibraci?"
   ],
-  "intent_id": "traffic_speed_offense_dispute_measurement",
+  "intent_id": "traffic_law_traffic_speed_offense_dispute_measurement",
   "keywords": [
     "chyba měření",
     "chyba radaru",

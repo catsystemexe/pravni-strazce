@@ -19,7 +19,7 @@
     "Dostal jsem fotku z úsekového měření a chtějí po mně, abych uvedl řidiče.",
     "Přišlo mi oznámení o přestupku s fotkou auta, ale nejsem si jistý, kdo řídil."
   ],
-  "intent_id": "traffic_speed_camera_notice",
+  "intent_id": "traffic_law_traffic_speed_camera_notice",
   "keywords": [
     "výzva k podání vysvětlení",
     "vyzva k podani vysvetleni",

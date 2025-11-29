@@ -19,7 +19,7 @@
     "Mám předvolání k ústnímu jednání kvůli překročení rychlosti, co si mám připravit?",
     "Správní orgán mi poslal návrh rozhodnutí za překročení rychlosti, má smysl podávat námitky?"
   ],
-  "intent_id": "traffic_speed_admin_proceeding",
+  "intent_id": "traffic_law_traffic_speed_admin_proceeding",
   "keywords": [
     "zahájení správního řízení",
     "zahajeni spravniho rizeni",

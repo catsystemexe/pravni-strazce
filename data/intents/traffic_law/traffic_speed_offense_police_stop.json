@@ -18,7 +18,7 @@
     "Policista tvrdí, že jsem jel rychle, ale nic mi neukázal.",
     "Můžu odmítnout podepsat blokovou pokutu?"
   ],
-  "intent_id": "traffic_speed_offense_police_stop",
+  "intent_id": "traffic_law_traffic_speed_offense_police_stop",
   "keywords": [
     "policie mě zastavila",
     "zastavili mě kvůli rychlosti",

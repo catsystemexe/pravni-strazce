@@ -18,7 +18,7 @@
     "Zaplatil jsem na místě pokutu za rychlost, ale teď si myslím, že to nebylo spravedlivé.",
     "Policie mi dala příkaz na místě za překročení rychlosti a já jsem to podepsal, aniž bych tomu rozuměl."
   ],
-  "intent_id": "traffic_speed_block_fine",
+  "intent_id": "traffic_law_traffic_speed_block_fine",
   "keywords": [
     "bloková pokuta",
     "blokova pokuta",
