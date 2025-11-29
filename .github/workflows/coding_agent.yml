@@ -43,28 +43,37 @@ jobs:
           python coding_agent.py "${{ inputs.task }}" > tmp/last_report.txt
 
       - name: Wrap report into HTML for GitHub Pages (global + per-type logs)
+        env:
+          RUN_MODE: ${{ inputs.mode }}   # <<< KLÍČOVÉ – mode z dispatchu
         run: |
           mkdir -p docs
           python - << 'EOF'
           from pathlib import Path
           import html
+          import os
 
           raw_path = Path("tmp/last_report.txt")
           text = raw_path.read_text(encoding="utf-8")
 
-          # --- detekce run typu a timestampu z prvních řádků ---
-          run_type = "GENERIC"
+          # --- 1) základní nastavení z workflow inputu ---
+          # RUN_MODE = analysis / fix / check (nebo něco jiného)
+          run_mode = os.environ.get("RUN_MODE", "").strip().lower() or "generic"
+          # pro lidský popis (velkými písmeny)
+          run_type = run_mode.upper()
           timestamp = "unknown"
 
+          # --- 2) pokus o přepsání z textu (pokud tam je Run type / Timestamp) ---
           for line in text.splitlines():
               if line.startswith("Run type :"):
-                  run_type = line.split(":", 1)[1].strip()
+                  # např. "Run type : ANALYSIS"
+                  run_type = line.split(":", 1)[1].strip() or run_type
               elif line.startswith("Timestamp (UTC) :"):
-                  timestamp = line.split(":", 1)[1].strip()
+                  timestamp = line.split(":", 1)[1].strip() or timestamp
 
-          # slug pro adresář: analysis / fix / check / generic
-          slug = run_type.lower().replace(" ", "_")
-          if slug == "":
+          # --- 3) slug pro adresář: analysis / fix / check / generic ---
+          # primárně podle RUN_MODE, ne podle textu
+          slug = run_mode.replace(" ", "_")
+          if not slug:
               slug = "generic"
 
           # bezpečný timestamp pro název souboru
@@ -77,8 +86,7 @@ jobs:
           # HTML tělo
           body = f"<pre>{html.escape(text)}</pre>"
 
-          # title – pro „last_report“ může být generický,
-          # per-type soubor dostane štítek s typem a časem
+          # 4) Globální poslední report
           html_doc_global = f"""<!DOCTYPE html>
           <html lang="cs">
           <head>
@@ -123,6 +131,7 @@ jobs:
           </html>
           """
 
+          # 5) Per-type HTML (analysis / fix / check)
           html_doc_typed = f"""<!DOCTYPE html>
           <html lang="cs">
           <head>
