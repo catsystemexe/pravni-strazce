@@ -40,462 +40,490 @@
     <pre>================================================================================
 ODPOVĚĎ CODING AGENTA:
 
-1. Stručné shrnutí (co chápu + hlavní závěry)
-- Projekt má už poměrně jasnou architekturu engine → runtime → product, ale data/intents jsou v přechodovém stavu.
-- Domény jsou definovány primárně v `data/_source/domains/**`, runtime intenty se ale očekávají v `data/intents/**` (který zatím vůbec neexistuje).
-- Traffic law (`traffic_law`) je první doména s plným „novým“ modelem (YAML + poddomény + intents/JSON).
-- Loader intentů (`engines/intent/loader.py`) je stále navázaný na starý jednoduchý formát JSONů v `data/intents/**` a nezná `_source`.
-- Ve `tools/` existují skripty pro generování/validaci intentů, ale aktuální adresářová struktura (`data/_source/...`) jim částečně „utekla“ a pipeline `_source → data/intents` není dotažená.
-- Doménová pravidla (`engines/domain_rules/*.yaml`) jsou paralelní systém vůči `_source/domains` – chybí jednotný „master katalog“.
-- Krátkodobě je potřeba: vytvořit minimální `data/intents` pro běh intent enginu a sladit datový model `IntentDefinition` s `_normalize_raw`.
-- Střednědobě: formálně zavést build pipeline `_source/domains → data/intents` a ji zadrátovat do tools + dokumentace (`docs/intent.system.md`).
-- Dlouhodobě: sjednotit doménový katalog (`domain_rules`, `_source/domains`, `runtime/domain_catalog.py`, `docs/domain_catalog.md`) a vyčistit testy + validace.
+1. Stručné shrnutí (co chápu + high‑level stav)
+------------------------------------------------
+
+- Projekt má jasné rozdělení: runtime pipeline, enginy (core_legal, risk, judikatura, intent atd.), produktové konfigurace, doménová data v `data/_source` a „runtime“ data v `data`.
+- Doménový model je soustředěn v `data/_source/domains/*` (per‑doména složky, u traffic_law navíc YAML + intents).
+- Intent engine (`engines/intent/*`) očekává hotové, normalizované intent JSONy v `data/intents/**`, ale adresář `data/intents` momentálně v repozitáři neexistuje.
+- Existují generátory/pomůcky v `tools/` (`generate_intents_from_domains.py`, `generate_intents_from_yaml.py`, `validate_intents.py`, `validate_data.py`), tj. je záměr mít „kompilační pipeline“ ze _source do runtime dat, ale není dovedena do konzistentního stavu.
+- `traffic_law` je první doména, která už má v `_source` detailní strukturu (domain.yaml, subdomains.yaml, intents/*), ostatní domény jsou zatím buď prázdné, nebo jen s jedním JSONem.
+- Struktura je blízko plánovanému modelu z dokumentace (`docs/intent.system.md`, `docs/README_datova_architektura.md`), ale chybí dotažená a zdokumentovaná pipeline `_source/domains → data/intents → intent_engine`.
+- Klíčový problém: Intent engine je nyní „odpojený“ – nemá zdrojové `data/intents/*.json`, a `_normalize_raw` je mírně nesouladný s `IntentDefinition` (přidává/odstraňuje pole jinak, než dataclass deklaruje).
 
 ---
 
-## 1) DOMÉNY – struktura v `data/_source/domains`
+2. Detailní analýza
 
-### 1.1 Seznam všech domén (podadresáře `data/_source/domains`)
+### 1) DOMÉNY – stav `data/_source/domains/*`
 
-Pro každou doménu:  
-- `domain.yaml`?  
-- `subdomains.yaml`?  
-- podadresář `intents` + soubory?
+#### 1.1 Výčet domén (složky) a obsah
 
-1. `administrative_law`
-   - `domain.yaml`: ANO (`appeal_admin_decision.json` je vedle, nikoli `domain.yaml`)
-   - `subdomains.yaml`: NE
-   - `intents/`: NE (je zde pouze `appeal_admin_decision.json` přímo v kořeni)
-2. `civil_law`
-   - `domain.yaml`: NE
-   - `subdomains.yaml`: NE
-   - `intents/`: NE
-3. `constitutional_law`
-   - `domain.yaml`: NE
-   - `subdomains.yaml`: NE
-   - `intents/`: NE
-4. `consumer_finance_law`
-   - `domain.yaml`: NE
-   - `subdomains.yaml`: NE
-   - `intents/`: NE (jen `consumer_credit.json` v kořeni)
-5. `corporate_law`
-   - `domain.yaml`: NE
-   - `subdomains.yaml`: NE
-   - `intents/`: NE
-6. `criminal_law`
-   - `domain.yaml`: NE
-   - `subdomains.yaml`: NE
-   - `intents/`: NE (jen `criminal_defense.json` v kořeni)
-7. `data_digital_law`
-   - `domain.yaml`: NE
-   - `subdomains.yaml`: NE
-   - `intents/`: NE
-8. `debt_law`
-   - `domain.yaml`: NE
-   - `subdomains.yaml`: NE
-   - `intents/`: NE
-9. `environmental_law`
-   - `domain.yaml`: NE
-   - `subdomains.yaml`: NE
-   - `intents/`: NE
-10. `family_law`
-    - `domain.yaml`: NE
-    - `subdomains.yaml`: NE
-    - `intents/`: NE
-11. `health_law`
-    - `domain.yaml`: NE
-    - `subdomains.yaml`: NE
-    - `intents/`: NE
-12. `inheritance_law`
-    - `domain.yaml`: NE
-    - `subdomains.yaml`: NE
-    - `intents/`: NE
-13. `international_law`
-    - `domain.yaml`: NE
-    - `subdomains.yaml`: NE
-    - `intents/`: NE
-14. `labor_law`
-    - `domain.yaml`: NE
-    - `subdomains.yaml`: NE
-    - `intents/`: NE (jen `labor_termination.json` v kořeni)
-15. `media_ip_law`
-    - `domain.yaml`: NE
-    - `subdomains.yaml`: NE
-    - `intents/`: NE
-16. `property_construction_law`
-    - `domain.yaml`: NE
-    - `subdomains.yaml`: NE
-    - `intents/`: NE
-17. `school_law`
-    - `domain.yaml`: NE
-    - `subdomains.yaml`: NE
-    - `intents/`: NE
-18. `social_law`
-    - `domain.yaml`: NE
-    - `subdomains.yaml`: NE
-    - `intents/`: NE
-19. `tax_law`
-    - `domain.yaml`: NE
-    - `subdomains.yaml`: NE
-    - `intents/`: NE
-20. `traffic_law`
-    - `domain.yaml`: ANO (`data/_source/domains/traffic_law/domain.yaml`)
-    - `subdomains.yaml`: ANO
-    - `intents/`: ANO (`intents/` se 7 JSON soubory)
+Pro každou doménu uvádím:
+- `domain.yaml`: ano/ne (přesný stav vidíme pouze pro traffic_law, u ostatních složek soubory nejsou vypsané → předpokládám „není“, explicitně to zmiňuji).
+- `subdomains.yaml`: ano/ne.
+- `intents/` s JSONy: ano/ne.
 
-### 1.2 Shoda se „plánovaným modelem“ domén
+**1. `school_law`**
+- Cesta: `data/_source/domains/school_law`
+- Viditelné soubory: žádné.
+- Stav:
+  - `domain.yaml`: ne (není uveden ve výpisu).
+  - `subdomains.yaml`: ne.
+  - `intents/`: ne.
+- Poznámka: skeleton složka bez obsahu.
 
-Plánovaný model (podle `docs/README_datova_architektura.md` + `docs/domain_map_traffic_law.md` – obsah sice není celý v promptu, ale z názvů plyne):
+**2. `debt_law`**
+- `data/_source/domains/debt_law`
+- Soubory: neuvedeny.
+- Stav:
+  - `domain.yaml`: ne.
+  - `subdomains.yaml`: ne.
+  - `intents/`: ne.
 
-- doménová složka nese:
-  - `domain.yaml` – metadata domény (název, popis, odkazy na pravidla, mapování na runtime domény),
-  - `subdomains.yaml` – hierarchie poddomén a tagů,
-  - `intents/*.json` – jednotlivé intent definice v „source“ formátu.
+**3. `environmental_law`**
+- `data/_source/domains/environmental_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**4. `property_construction_law`**
+- `data/_source/domains/property_construction_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**5. `social_law`**
+- `data/_source/domains/social_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**6. `media_ip_law`**
+- `data/_source/domains/media_ip_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**7. `constitutional_law`**
+- `data/_source/domains/constitutional_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**8. `family_law`**
+- `data/_source/domains/family_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí (pozn.: existuje `packs/family`, ale ne `_source` doménový YAML).
+
+**9. `data_digital_law`**
+- `data/_source/domains/data_digital_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**10. `labor_law`**
+- `data/_source/domains/labor_law`
+- Soubory:
+  - `labor_termination.json`
+- Stav:
+  - `domain.yaml`: ne.
+  - `subdomains.yaml`: ne.
+  - `intents/`: ne (namísto toho je zde přímo intentový JSON, ale bez standardizovaného podadresáře).
+- Poznámka: starší formát – „intenty rovnou v doménové složce“.
+
+**11. `health_law`**
+- `data/_source/domains/health_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**12. `tax_law`**
+- `data/_source/domains/tax_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**13. `administrative_law`**
+- `data/_source/domains/administrative_law`
+- Soubory:
+  - `appeal_admin_decision.json`
+- Stav:
+  - `domain.yaml`: ne.
+  - `subdomains.yaml`: ne.
+  - `intents/`: ne, opět starší formát.
+
+**14. `inheritance_law`**
+- `data/_source/domains/inheritance_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**15. `criminal_law`**
+- `data/_source/domains/criminal_law`
+- Soubory:
+  - `criminal_defense.json`
+- Stav:
+  - `domain.yaml`: ne.
+  - `subdomains.yaml`: ne.
+  - `intents/`: ne (JSON leží přímo v kořenu domény).
+
+**16. `traffic_law`**
+- `data/_source/domains/traffic_law`
+  - `domain.yaml`
+  - `subdomains.yaml`
+  - `readme.md`
+- `data/_source/domains/traffic_law/intents`
+  - více konkrétních intent JSONů (`traffic_speed_*`).
+- Stav:
+  - `domain.yaml`: ano.
+  - `subdomains.yaml`: ano.
+  - `intents/` s JSONy: ano (7 souborů).
+- Poznámka: toto je skoro „referenční“ doména podle plánovaného modelu.
+
+**17. `corporate_law`**
+- `data/_source/domains/corporate_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**18. `civil_law`**
+- `data/_source/domains/civil_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+**19. `consumer_finance_law`**
+- `data/_source/domains/consumer_finance_law`
+  - `consumer_credit.json`
+- Stav:
+  - `domain.yaml`: ne.
+  - `subdomains.yaml`: ne.
+  - `intents/`: ne (JSON opět v kořeni).
+
+**20. `international_law`**
+- `data/_source/domains/international_law`
+- Soubory: neuvedeny.
+- Stav: vše chybí.
+
+#### 1.2 Soulad s plánovaným modelem domén
+
+Z dokumentace (`docs/domain_catalog.md`, `docs/domain_map_traffic_law.md`, `docs/README_datova_architektura.md`, `docs/intent.system.md` – nejsou zde vypsané, ale jejich existence ukazuje na model):
+
+Očekávaný model (zjevně směřujete k tomuto):
+
+- Per‑doména složka v `data/_source/domains/&lt;domain_key&gt;/`
+- V ní:
+  - `domain.yaml` – metadata domény (název, popis, mapping na runtime doménu/core_legal, případně vazba na `engines/domain_rules/*.yaml`).
+  - `subdomains.yaml` – granularita uvnitř domény.
+  - `intents/` – jemnozrnné intent JSONy (zdrojový formát).
+- Dále: nějaký build/generate krok, který z těchto `_source` dat vygeneruje agregované/normalizované intent JSONy do `data/intents/*`.
 
 Hodnocení:
 
-- `traffic_law` tento model plně dodržuje → vzorová doména.
-- Ostatní domény jsou v „legacy / rozpracovaném“ stavu:
-  - jednotlivé JSON soubory leží přímo v kořeni doménové složky, nikoli v `intents/`.
-  - chybí `domain.yaml` i `subdomains.yaml`.
-  - formát JSONů pravděpodobně odpovídá spíš starému modelu (bez doménových metadat).
-
-Závěr:  
-- Model je konzistentně definovaný (viz traffic_law), ale reálně aplikovaný jen na jednu doménu.
-- Pro ostatní domény bude potřeba migrační krok: přesun JSONů do `intents/`, doplnění doménových YAML a sjednocení formátu.
+- `traffic_law` model tento vzor už naplňuje (OK).
+- `labor_law`, `administrative_law`, `criminal_law`, `consumer_finance_law` mají starší/nesourodý „single JSON přímo v kořeni domény“ (MIX).
+- Většina ostatních domén je zatím jen prázdný skeleton bez YAML definice / intents (BROKEN/MISSING z pohledu plnohodnotného modelu).
 
 ---
 
-## 2) INTENTS – loader, cesty, pipeline
+### 2) INTENTS – loader + vztah k `_source`
 
-### 2.1 Loader pro intenty (`engines/intent/loader.py`)
+#### 2.1 Loader `engines/intent/loader.py`
 
-Klíčové:
+Klíčové body:
 
 - `BASE_DIR = os.path.join(&quot;data&quot;, &quot;intents&quot;)`
-- `os.walk(BASE_DIR)` – prochází reálné „runtime“ JSONy.
-- `_normalize_raw(raw)`:
-  - přejmenuje `id → intent_id`, pokud je přítomno,
-  - přidá default prázdné listy pro `keywords` a `negative_keywords`,
-  - odstraňuje `intent_group` (explicitně ji maže),
-  - whitelisting povolených polí:  
-    `intent_id, label_cs, domain, subdomains, description_cs, keywords, negative_keywords, risk_patterns, basic_questions, safety_questions, normative_references, conclusion_skeletons, notes, version`.
+  - Loader **očekává**, že runtime intent JSONy budou ležet v `data/intents/**`.
+- Prochází `os.walk(BASE_DIR)` a načítá všechny `*.json`.
+- `_normalize_raw`:
+  - `id` → `intent_id`
+  - doplňuje chybějící `keywords` a `negative_keywords` prázdnými listy.
+  - odstraní `intent_group` (pokud je v raw) – to je zvláštní, protože `IntentDefinition` dataclass pole `intent_group` má.
+  - definuje whitelist `valid_fields` (bez `intent_group` a `examples`!), cokoliv mimo tento set je odstraněno.
 
-Potom `IntentDefinition(**normalized)`.
+**Problém 1 – pole `intent_group` a `examples`:**
 
-### 2.2 Model `IntentDefinition` vs loader
+- `IntentDefinition`:
 
-`engines/intent/definition.py`:
+  ```python
+  @dataclass
+  class IntentDefinition:
+      ...
+      notes: str = &quot;&quot;
+      version: str = &quot;1.0.0&quot;
+      intent_group: str = &quot;general&quot;
+      examples: List[str] = field(default_factory=list)
+  ```
 
-```py
-@dataclass
-class IntentDefinition:
-    intent_id: str
-    label_cs: str
-    domain: str
-    description_cs: str
-    subdomains: List[str]
-    keywords: List[str]
-    negative_keywords: List[str]
-    risk_patterns: List[Dict[str, Any]]
-    basic_questions: List[str]
-    safety_questions: List[str]
-    normative_references: List[str]
-    conclusion_skeletons: Dict[str, str]
+- `_normalize_raw`:
+  - z `raw` aktivně odstraňuje `intent_group`.
+  - ve `valid_fields` vůbec neobsahuje `intent_group` ani `examples`.
 
-    notes: str = &quot;&quot;
-    version: str = &quot;1.0.0&quot;
-    intent_group: str = &quot;general&quot;
-    examples: List[str] = field(default_factory=list)
-```
+Důsledky:
 
-Diskrepance:
+- Z `_source` nebo runtime JSONů se jakékoliv expliticní `intent_group` nebo `examples` zahodí.
+- Intent engine v `_heuristic_classify` chce číst `intent_group` z `IntentDefinition` a používá `getattr(intent_def, &quot;intent_group&quot;, None)`. To ale skončí vždy defaultem `&quot;general&quot;`, protože loader mu ten údaj nemůže dodat.
+- Tj. logika pro skupiny intentů je designovaná, ale datově neprochází (MIX/BUG).
 
-- `_normalize_raw` explicitně odstraňuje `intent_group`, ale `IntentDefinition` ho má jako field s defaultem.  
-  → data z JSON nikdy `intent_group` nepřenášejí; engine si fallbackuje na default „general“.
-- `examples` není uvedeno v `valid_fields` → je vždy oříznuto, i kdyby bylo v JSON.  
-  → dataclass ho má, ale loader ho nikdy neplní.
+**Problém 2 – fyzický umístění runtime JSONů:**
 
-To je vnitřně nekonzistentní datový model.
+- V repozitáři momentálně NEVIDÍM adresář `data/intents`.
+- Tudíž `load_intents()` by při běhu na čistém checkoutu nic nenašlo → `get_intent_definitions()` vrátí prázdný seznam → heuristika `_heuristic_classify` nikdy nenajde žádný intent (vše padne do fallbacku `general`/`unknown`).
+- Není zde zároveň explicitní popis nebo skript, který by „kompiloval“ `_source/domains/*` do `data/intents/*` a volal se z CI nebo před spuštěním runtime.
 
-### 2.3 Odkud se mají brát „runtime“ intenty
+#### 2.2 Odkud se mají brát runtime intent JSONy?
 
-- Loader používá `data/intents/**` → to je cílová (runtime) složka.
-- Skutečná data jsou ale v `data/_source/domains/**`:
-  - traffic_law má podadresář `intents/` plus YAML metadata.
-  - ostatní domény mají jednotlivé JSONy v kořeni.
+Podle současného kódu:
 
-Související skripty v `tools/` (podle názvu):
+- runtime = `data/intents/**` (striktně).
+- `_source` = `data/_source/domains/**`:
 
-- `generate_intents_from_domains.py` – pravděpodobně má dělat transformaci z `_source/domains` do `data/intents`.
-- `generate_intents_from_yaml.py` – starší/alternativní transformace z YAML definic (např. doménové mapy) do JSON intentů.
+  - `traffic_law/intents/*.json` – zjevně „autorita“ (přesnější, bohatší definice).
+  - několik starších JSONů (např. `labor_termination.json`) – pravděpodobně je plán přemigrovat je do struktury `intents/` + doplnit `domain.yaml`.
 
-To ukazuje záměr:
+V `tools/` jsou dva nástroje, které z názvu naznačují pipeline:
 
-- `_source/*` = master/authoring data (člověkem udržované)
-- `data/intents/*` = build artefakty pro runtime `intent_engine`.
+- `generate_intents_from_domains.py`
+- `generate_intents_from_yaml.py`
 
-### 2.4 Je struktura domén a intentů konzistentní?
+Bez obsahu souborů ale nevidíme, zda:
 
-Aktuální stav:
+- už počítají s `traffic_law/domain.yaml` apod.,
+- generují výstup do `data/intents` nebo někam jinam.
 
-- Není přítomen adresář `data/intents` (ve výpisu ho nevidím).
-- `intent_engine` při volání `load_intents()` dostane prázdný seznam nebo vyhodí chybu, pokud složka neexistuje (os.walk na neexistující složce vrátí nic → prázdný seznam, takže engine běží, ale bez jakýchkoli definic → předvolený fallback intent „general“, domain „unknown“).
-- `_source` struktura není propojená s runtime částí žádným zadrátovaným krokem – chybí jasný build krok v dokumentaci a CI.
+Proto: „pipeline“ je nastíněná, ale není jasně formalizovaná ani konzistentně napojená na runtime engine.
 
-Závěr:
+#### 2.3 Konsistence struktury domén vs. intentů
 
-- Pipeline `_source/domains → data/intents` existuje jako koncept (scripts + docs), ale není technicky ani procesně dotažená.
-- Model `IntentDefinition` a `_normalize_raw` jsou částečně rozjeté (viz `intent_group`, `examples`).
-- Konsistence traffic_law vs ostatní domény není zajištěná (jen traffic_law odpovídá plánovanému vzoru).
+- Doménová vrstva:
+  - runtime domény jsou také v `engines/domain_rules/*.yaml` (spotrebitel, skolske, trestni atd.) – to je jiná dimenze (pravidla/risk), ale pojmenování domén by mělo být v souladu s doménami v `_source` a v `IntentDefinition.domain`.
+- Intent vrstva:
+  - `IntentDefinition.domain` je string; pro traffic_law‑intenty bude pravděpodobně `&quot;traffic_law&quot;`.
+  - engine `core_legal` / `runtime/domain_catalog.py` (není zde vypsán obsah, ale pravděpodobně definuje mapování domén).
+- V současnosti:
+  - není vidět jednotný „master katalog“ domén, který by centralizoval:
+    - ID domény
+    - vazbu na `_source` doménu
+    - vazbu na `engines/domain_rules` YAML
+    - vazbu na `IntentDefinition.domain`.
 
----
+Hodnocení:
 
-## 3) NÁSTROJE – skripty v `tools/`
-
-### 3.1 `tools/validate_data.py`
-
-Z názvu a struktury projektu:
-
-- Má pravděpodobně:
-  - validovat schémata domén (`data/schema/domains.json`) vůči `data/_source/domains/**`.
-  - kontrolovat, zda `_source` data odpovídají definovanému JSON schema a naming conventions.
-- Vstupy:
-  - typicky `data/_source/**` + `data/schema/**`.
-- Výstupy:
-  - chyby na stdout/exit code, případně report.
-- Pravděpodobný stav:
-  - ČÁSTEČNĚ POUŽITELNÝ / MIX – ale nemáme obsah, takže:
-    - není zřejmé, jestli zná „nový“ model traffic_law,
-    - není zřejmé, jestli očekává `data/intents` nebo jen `_source`.
-
-### 3.2 `tools/generate_intents_from_domains.py`
-
-- Co má dělat:
-  - Projít `data/_source/domains/**` (včetně `traffic_law` a dalších domén).
-  - Z `domain.yaml`, `subdomains.yaml` a jednotlivých JSONů v `intents/` (nebo v kořeni) sestavit plnohodnotné runtime intent JSONy pro `data/intents/**`.
-  - Tedy aplikovat:
-    - mapping doména → `domain` field v `IntentDefinition`,
-    - mapping subdomén → `subdomains` field,
-    - generování `keywords`, doplnění `risk_patterns`, atd. dle nějakého zdroje.
-- Vstupy:
-  - `data/_source/domains/**`, `data/schema/*` (možná).
-- Výstupy:
-  - soubory v `data/intents/**` (každý intent = jeden JSON).
-- Stav:
-  - pravděpodobně ČÁSTEČNĚ PŘIZPŮSOBEN starému modelu; traffic_law je první doména využívající nový pattern a skript možná ještě není aktualizován.
-
-### 3.3 `tools/generate_intents_from_yaml.py`
-
-- Co má dělat:
-  - Z YAML souborů (dřívější forma zápisu intentů nebo domain map) generovat JSON intentů (možná starší generace před `_source/domains`).
-- Vstupy:
-  - nějaké YAML definice domén/intents – možná `engines/domain_rules/*.yaml` nebo starší soubory v `docs/analysis` / `docs/generic`.
-- Výstupy:
-  - JSONy v `data/intents/**` nebo `_source/intents`.
-- Stav:
-  - pravděpodobně LEGACY. Vzhledem k tomu, že hlavní doménová data jsou nyní v `data/_source/domains/**` a ne v YAML souborech s intenty.
-
-### 3.4 `tools/render_report_to_html.py`
-
-- Nesouvisí přímo s doménami/intenty.
-- Co má dělat:
-  - z Markdown reportů (např. `out/last_report.md`) generovat HTML (report pro lidi).
-- Stav:
-  - pravděpodobně OK, nezávislé na změnách domén.
-
-### 3.5 `tools/apply_policy.py`
-
-- Co má dělat:
-  - aplikovat nějakou „policy“ (pravděpodobně `prompts/policy` nebo product policy) na data/testy.
-- Nesouvisí přímo se strukturou domén, spíše s LLM/engines.
-- Stav:
-  - není možné posoudit bez obsahu, ale strukturálně není navázán na `_source`.
-
-### 3.6 `tools/validate_intents.py`
-
-- Co má dělat:
-  - Validovat obsah `data/intents/**` vůči datové třídě `IntentDefinition` a/nebo JSON schema:
-    - povinná pole (`intent_id`, `domain`, `label_cs`…),
-    - typy `keywords: list[str]`, `basic_questions: list[str]`, atd.
-- Vstupy:
-  - `data/intents/**` (runtime data).
-- Výstupy:
-  - výpis chyb, exit code pro CI.
-- Stav:
-  - Pokud `data/intents` ještě neexistuje, skript bude mít minimální použití; test `tests/test_generate_intents_from_yaml.py` ukazuje, že tam je aspoň nějaký test stagovaného procesu, ale aktuální architektura `_source/domains` není plně zadrátovaná.
+- Vnitřně je teď struktura domén a intentů **nekonzistentní**:
+  - loader čte z `data/intents`, ale `_source` je v `data/_source/domains`.
+  - neexistuje implementovaný a dokumentovaný krok „kompilace“ `_source` → `data/intents`.
+  - datový model definic intentů (dataclass) a normalizační funkce `_normalize_raw` se rozcházejí u několika polí.
 
 ---
 
-## 4) Vyhodnocení a doporučení
+### 3) NÁSTROJE – `tools/*` související s doménami a intenty
 
-### 4.1 Stav: OK / MIX / BROKEN
+Ve výpisu jsou tyto relevantní skripty:
 
-**OK:**
+- `tools/validate_data.py`
+- `tools/generate_intents_from_domains.py`
+- `tools/generate_intents_from_yaml.py`
+- `tools/validate_intents.py`
+
+Obsah těchto souborů není zatím v promptu, takže:
+
+- neumím přesně říct, jaké mají vstupy/výstupy, jen z názvů.
+- přesto je lze rámcově kategorizovat.
+
+#### 3.1 `tools/validate_data.py`
+
+- Co má dělat (odhad):
+  - Validovat strukturu dat v `data/_source` (doménové YAML, intent JSONy) proti schématům v `data/schema/domains.json` apod.
+- Vstupy:
+  - pravděpodobně adresář `data/_source` a JSON schema v `data/schema`.
+- Výstupy:
+  - exit kód + textová hlášení validace (chybějící pole, špatné typy).
+- Stav:
+  - bez kódu nelze říct, zda je rozbitý, ale vzhledem k čerstvě měněné adresářové struktuře by mohl používat **staré cesty** (BROKEN/MIX – je potřeba zkontrolovat a případně upravit).
+
+#### 3.2 `tools/generate_intents_from_domains.py`
+
+- Co má dělat (odhad):
+  - Projít `data/_source/domains/*` a na základě `domain.yaml` a `intents/*.json` (případně dalších konfigů) vygenerovat normalizované runtime intent JSONy do `data/intents/&lt;something&gt;.json`.
+- Vstupy:
+  - `_source` doménové složky.
+- Výstupy:
+  - složka `data/intents` s agregovanými/normalized JSONy ve formátu očekávaném `IntentDefinition`.
+- Stav:
+  - není jasné, zda počítá s novou strukturou (traffic_law) nebo starou (single JSON v kořeni domény).
+  - protože `data/intents` v repu zatím neexistuje, skript buď nebyl spuštěn, nebo generuje do jiné cesty.
+  - předpokládám, že v současném stavu je **nepoužívaný** a může být částečně zastaralý (MIX).
+
+#### 3.3 `tools/generate_intents_from_yaml.py`
+
+- Co má dělat (odhad):
+  - Generovat intent JSONy z YAML (např. definice intentů v YAML souborech, které v repu aktuálně nevidíme, nebo z `domain.yaml`/`subdomains.yaml`).
+- Vstupy:
+  - YAML zdroje (možná v `data/_source` nebo `docs`).
+- Výstupy:
+  - JSON definice (buď do `_source/domains/.../intents`, nebo přímo do `data/intents`).
+- Stav:
+  - zřejmě starší/alternativní cesta; bez jasné dokumentace pipeline je těžké říct, která varianta je „ta oficiální“.
+  - potenciálně v konfliktu s `generate_intents_from_domains.py` (dvě cesty ke stejnému výsledku).
+  - kandidát na konsolidaci (MIX).
+
+#### 3.4 `tools/validate_intents.py`
+
+- Co má dělat (odhad):
+  - Kontrolovat, že všechny runtime intent JSONy (`data/intents/*`) odpovídají datovému modelu (např. proti `IntentDefinition` nebo JSON schema).
+- Vstupy:
+  - `data/intents` (která zatím v repu neexistuje).
+- Výstupy:
+  - report chyb v definicích intentů (chybějící klíče, špatné typy, id duplicity).
+- Stav:
+  - dokud není adresář `data/intents`/data, je prakticky nepoužitelný (BROKEN/MISSING z hlediska celkového workflow).
+
+---
+
+3. Vyhodnocení a doporučení (OK / MIX / BROKEN + konkrétní kroky)
+-----------------------------------------------------------------
+
+### 4.1 Stav (OK / MIX / BROKEN/MISSING)
+
+**OK**
+
+- Základní architektura engine → runtime pipeline (`runtime/orchestrator`, `engines/*`) – propojeno, testy běží.
 - `engines/intent/engine.py`:
-  - funguje i s prázdnou sadou intentů (vrací defaultní hodnoty) – nezboří pipeline.
-  - jasně definuje, že runtime data se načítají z `data/intents/**`.
-- `traffic_law` doména:
-  - má vzorovou strukturu `domain.yaml + subdomains.yaml + intents/`.
-- LLM vrstva + orchestrator:
-  - nejsou blokér pro práci s intenty.
+  - API je rozumné, heuristická klasifikace + volitelný LLM fallback.
+  - Použití cache pro intent definice, lazy LLM.
+- Doménový model `traffic_law`:
+  - má `domain.yaml`, `subdomains.yaml`, per‑intent JSONy.
+  - je dobrý příklad pro ostatní domény.
 
-**MIX (částečně hotové / nekonzistentní):**
-- Datový model IntentDefinition vs `_normalize_raw`:
-  - některá pole jsou v dataclass, ale jsou oříznuta loaderem (`examples`, `intent_group`).
-- Domény:
-  - `traffic_law` odpovídá cílovému modelu, ostatní domény používají starší/meziformát.
-- Nástroje:
-  - existují generátory/validátory, ale nejsou zjevně přepnuté na nový `_source/domains` model (musí se ověřit v kódu).
-- Dokumentace:
-  - existují `docs/intent.system.md`, `docs/domain_map_traffic_law.md`, `docs/README_datova_architektura.md`, ale chybí explicitní „build krok“:  
-    `python tools/generate_intents_from_domains.py → data/intents`.
+**MIX (částečně hotové / nekonzistentní)**
 
-**BROKEN / MISSING:**
-- `data/intents/**` adresář:
-  - chybí runtime JSONy, na které je navázán `intent_engine`.  
-  - výsledek: engine běží, ale bez reálné klasifikace (pouze fallback).
-- Jednoznačná pipeline `_source → data/intents`:
-  - není kodifikovaná (chybí standardní make/poetry script, chybí zmínka v README).
-- Jednotný doménový katalog:
-  - `engines/domain_rules/*.yaml` vs `data/_source/domains/**` vs `runtime/domain_catalog.py` – více zdrojů pravdy.
+- Struktura domén v `_source`:
+  - některé mají single JSON v kořeni, některé jsou prázdé, traffic_law je nový vzor.
+- Intent datový model:
+  - `IntentDefinition` vs. `_normalize_raw` nejsou v souladu (ignorují se `intent_group` a `examples`).
+- Nástroje v `tools/`:
+  - existují, ale není jasné, která cesta je „kanonická“ a na jaké cesty jsou napsány.
+- Mapování domény ↔ runtime:
+  - domény se objevují:
+    - jako složky v `_source`,
+    - jako `domain` v `IntentDefinition`,
+    - jako YAML v `engines/domain_rules`.
+  - chybí jeden master „domain_catalog“, který by toto sjednotil (i když existuje `runtime/domain_catalog.py`, není zde vidět, že by byl napojen na `_source` data).
+
+**BROKEN/MISSING**
+
+- Neexistuje složka `data/intents` s runtime JSONy → intent engine pracuje efektivně na prázdném datasetu.
+- Chybí explicitně definovaná a zdokumentovaná pipeline:
+  - `_source/domains/**` → (validate_*) → (generate_*) → `data/intents/**` → `engines/intent`.
+- Mnoho domén nemá `domain.yaml`, `subdomains.yaml` ani `intents`.
+- Validace dat (tools) je zřejmě psaná proti starší struktuře, není jasné, zda běží v CI.
 
 ---
 
-## 5) Konkrétní doporučené kroky (s prioritou)
+4.2 Konkrétní doporučené kroky (v pořadí priority)
 
-### 5.1 Krátkodobé (rychlé fixy, aby šly používat intenty)
+### Krátkodobé (odblokovat práci s intenty)
 
-1. **Vytvořit minimální `data/intents` pro traffic_law**
-   - Pro účely funkční klasifikace:
-     - zkopírovat nebo vygenerovat (ručně/skriptem) JSONy z `data/_source/domains/traffic_law/intents/*.json` do `data/intents/traffic_law/*.json`.
-     - přizpůsobit je formátu očekávanému `IntentDefinition` + `_normalize_raw`:
-       - mít vždy: `intent_id`, `label_cs`, `domain` (např. `&quot;traffic_law&quot;`), `description_cs`, `subdomains` (list), `keywords`, `negative_keywords`, `risk_patterns`, `basic_questions`, `safety_questions`, `normative_references`, `conclusion_skeletons`.
-       - zkontrolovat, že žádná další pole nejsou dropnuta neúmyslně.
-   - Cíl: `intent_engine` začne vracet smysluplné domény/intent pro provozní testování.
+1. **Založit a naplnit minimální `data/intents` pro demonstraci**
+   - Vytvořit ručně (zatím) alespoň 1–2 runtime intent JSONy, např. složku:
+     - `data/intents/traffic_law/traffic_speed_offense_generic.json` (kopie/úprava `_source/domains/traffic_law/intents/traffic_speed_offense_generic.json` do formátu `IntentDefinition`).
+   - Ověřit, že:
+     - `python -m engines.intent.loader` (pokud doplníte malý test skript) načte data bez chyb.
+     - Intent engine `_heuristic_classify` dává smysluplný výsledek.
 
-2. **Srovnat `IntentDefinition` a `_normalize_raw`**
-   - Rozhodnout:
-     - buď chceme `intent_group` a `examples` používat → doplnit je do `valid_fields` a NEodstraňovat `intent_group`,
-     - nebo je nechceme → odstranit je z dataclass.
-   - Doporučení:
-     - `intent_group` je důležitý (řazení typů intentů), takže:
-       - zrušit `raw.pop(&quot;intent_group&quot;)` a přidat `&quot;intent_group&quot;` + `&quot;examples&quot;` do `valid_fields`.
-   - Tím se sjednotí datový model.
+2. **Opravit `_normalize_raw` tak, aby respektoval `IntentDefinition`**
+   - V `valid_fields` přidat:
+     - `&quot;intent_group&quot;`, `&quot;examples&quot;`.
+   - Zrušit explicitní `raw.pop(&quot;intent_group&quot;)`.
+   - Tím se zajistí, že:
+     - loadery nebudou zahazovat `intent_group` a `examples` z JSONů.
+     - `getattr(intent_def, &quot;intent_group&quot;, None)` vrátí reálné skupiny, ne jen default.
+   - Krátký unit test pro `load_intents()` na jednom vzorovém JSONu by to měl pokrýt.
 
-3. **Doplnit jednoduchý krok do README / docs**
-   - Do `docs/intent.system.md` nebo hlavního README přidat:
-     - „Pro generování runtime intentů spuštěte:  
-       `python tools/generate_intents_from_domains.py`  
-       což vytvoří/aktualizuje `data/intents/**`.“
-   - I kdyby skript zatím podporoval jen `traffic_law`, bude jasné, jaký je zamýšlený proces.
+3. **Doplnit do `docs/intent.system.md` / `docs/README_datova_architektura.md` aktuální fakt, že runtime intenty jsou v `data/intents`**
+   - Jasně napsat:
+     - „Engine `engines.intent.loader` čte **pouze** z `data/intents/**`.“
+     - `_source/domains/...` je „autorita“ a „build target“ je `data/intents`.
+   - To umožní další práci, aniž by vývojáři tápali, odkud se mají intenty načítat.
 
-4. **Sanity check loaderu na prázdnou složku**
-   - Ověřit (ručně/pytest), že `load_intents()` korektně vrací prázdný seznam i v případě, že `data/intents` zatím neexistuje (a případně ošetřit výjimku `FileNotFoundError` – obalit `os.walk`).
-   - Přidat krátkou poznámku do kódu, že prázdný seznam je očekávané chování.
+4. **Zrychlený sanity check nástrojů**
+   - Otevřít `tools/generate_intents_from_domains.py` a ověřit:
+     - používá vstupní cesty `data/_source/domains`?
+     - generuje výstup do `data/intents`?
+   - Pokud ne, rychle upravit cesty tak, aby odpovídaly nové adresářové struktuře (bez velkého refactoringu logiky).
 
-### 5.2 Střednědobé (sjednocení datového modelu, pipeline `_source → data/intents`)
+### Střednědobé (sjednocení datového modelu, pipeline `_source → data/intents`)
 
-5. **Formálně zavést build pipeline `_source/domains → data/intents`**
-   - Zrevidovat `tools/generate_intents_from_domains.py`:
-     - vstup: `data/_source/domains/&lt;domain&gt;/domain.yaml`, `subdomains.yaml`, `intents/*.json`,
-     - výstup: `data/intents/&lt;domain&gt;/*.json` již ve formátu odpovídajícím `IntentDefinition` (vč. `keywords`, `risk_patterns` atd.).
-   - Definovat v něm:
-     - jednotné mapování názvů domén (`traffic_law`, `labor_law`, …) na `domain` field v intentu,
-     - jak se generují/plní `subdomains` (např. string IDs z `subdomains.yaml`).
-   - Přidat CLI interface:
-     - `python tools/generate_intents_from_domains.py --domain traffic_law`
-     - `python tools/generate_intents_from_domains.py --all`.
-
-6. **Migrovat ostatní domény na „traffic_law model“**
-   - Pro každou doménu v `data/_source/domains`:
-     - vytvořit `domain.yaml` (minimálně s `id`, `label_cs`, `description_cs`),
-     - vytvořit `subdomains.yaml` (i kdyby zatím jen plochý seznam),
-     - přesunout existující JSONy (např. `labor_termination.json`) do `intents/` podadresáře.
-   - Přizpůsobit formát těchto JSONů tak, aby:
-     - obsahovaly pole očekávaná `IntentDefinition`,
-     - byly kompatibilní s generátorem do `data/intents`.
-
-7. **Sepis „master doménového katalogu“**
-   - V `data/schema/domains.json` a `docs/domain_catalog.md`:
-     - zajistit, že seznam domén odpovídá adresářům v `data/_source/domains/**`.
-   - Dále:
-     - zkontrolovat `runtime/domain_catalog.py` (není v promptu, ale pravděpodobně existuje logika mapování domén),
-     - sjednotit názvy a IDs domén (žádné duplikace ani odlišné slugy).
-
-8. **Zrevidovat a sjednotit nástroje:**
-   - `generate_intents_from_yaml.py`:
-     - rozhodnout, zda:
-       - úplně odstranit (pokud už není potřeba), nebo
-       - označit jako `legacy` v docstringu + v README.
-   - `validate_intents.py`:
-     - aktualizovat, aby validoval přesně ten formát, který vyrábí `generate_intents_from_domains.py` (a který očekává `IntentDefinition`).
-   - `validate_data.py`:
-     - rozšířit, aby kontroloval i konzistenci mezi `domain.yaml`, `subdomains.yaml` a reálnými intent JSONy v `intents/`.
-
-### 5.3 Dlouhodobé (testy, dokumentace, refaktoring)
-
-9. **Vyčistit a rozšířit testy kolem intentů**
-   - Přidat:
-     - unit test pro `load_intents()` s reálným minimálním datovým vzorkem (např. traffic_law).
-     - integrační test:  
-       1) zavolá `generate_intents_from_domains.py` na testovací `_source` data,  
-       2) zavolá `load_intents()`,  
-       3) ověří, že data jsou konzistentní a že `intent_engine.run()` klasifikuje jednoduché dotazy do očekávaných intentů.
-   - Test `tests/test_generate_intents_from_yaml.py`:
-     - přehodnotit – pokud je to legacy pipeline, buď ji zahodit, nebo adaptovat na nový standard.
-
-10. **Lepší dokumentace datové architektury**
-   - Aktualizovat `docs/README_datova_architektura.md` a `docs/intent.system.md`:
-     - explicitní diagram:
-       - `_source/domains/&lt;domain&gt;/{domain.yaml, subdomains.yaml, intents/*.json}`  
-       → `tools/generate_intents_from_domains.py`  
-       → `data/intents/&lt;domain&gt;/*.json`  
-       → `engines/intent/loader.load_intents()` → `IntentDefinition`.
-     - popsat, kde se definují:
-       - `keywords` (jen v intent JSON),
-       - `subdomains` (z `subdomains.yaml`, jak se propisují do intentů),
-       - vztah na `engines/domain_rules/*.yaml` (pravidla vs. intenty).
-
-11. **Sjednotit doménová pravidla s doménovým katalogem**
-   - `engines/domain_rules/*.yaml` reprezentují pravidla pro runtime domény (civil, rodinne, spravni, …).  
-   - Doporučený cíl:
-     - `domain.yaml` jednotlivých domén by měl obsahovat odkaz/název na odpovídající `domain_rules` subset.
-     - `runtime/domain_catalog.py` by měl číst společný katalog a z něj:
-       - generovat mapování pro domain classification,
-       - referencovat `domain_rules`.
-   - Tím získáte jednotný zdroj pravdy:
-     - „jaké domény existují“,  
-     - „jaké mají subdomény“,  
-     - „jaké mají intenty“,  
-     - „jaká pravidla se na ně vztahují“.
-
-12. **Dlouhodobý refaktoring loaderu**
-   - Zvážit:
-     - Nepoužívat „ruční“ `_normalize_raw` + `valid_fields`, ale:
-       - buď Pydantic modely s validací a defaulty,
-       - nebo JSON schema validaci před načtením.
+5. **Navrhnout a implementovat „kompilační pipeline“**
    - Cíl:
-     - transparentně vidět, co je povinné a co volitelné,  
-     - při přidání nového pole (např. `examples`) mít jeden centrální bod úpravy.
+     - Jeden kanonický skript, např. `tools/build_intents.py`, který:
+       1. Projde všechny domény v `data/_source/domains/*`.
+       2. Pro každou:
+          - načte `domain.yaml` (pokud existuje),
+          - načte `subdomains.yaml`,
+          - načte per‑intent JSON/y v `intents/` (nebo případně single JSON v kořeni, viz staré domény).
+       3. Normalizuje do `IntentDefinition` tvaru.
+       4. Zapíše do `data/intents/&lt;domain&gt;/&lt;intent_id&gt;.json`.
+   - `generate_intents_from_domains.py` a `generate_intents_from_yaml.py`:
+     - buď sjednotit do jednoho nástroje,
+     - nebo jasně deklarovat, který je „hlavní“ a druhý deprecovat.
+
+6. **Dodat explicitní mapping mezi `_source` doménami a runtime doménami**
+   - Ideálně centrálně v jednom YAML/JSON, nebo:
+     - využít `data/schema/domains.json` + `runtime/domain_catalog.py` jako jeden zdroj pravdy.
+   - Tento mapping by měl obsahovat:
+     - `domain_key` (např. `traffic_law`),
+     - název v češtině,
+     - odkaz na `engines/domain_rules/&lt;x&gt;.yaml` (pokud existuje),
+     - informaci, zda se pro tuto doménu již mají generovat intenty.
+
+7. **Migrace starých doménových JSONů na traffic_law‑like strukturu**
+   - Pro domény:
+     - `labor_law`, `administrative_law`, `criminal_law`, `consumer_finance_law`:
+   - Kroky:
+     1. Vytvořit v každé doméně `intents/` složku.
+     2. Přesunout existující `*.json` do `intents/`.
+     3. Dodat minimální `domain.yaml` + případně `subdomains.yaml`.
+   - Poté upravit „build script“, aby nový formát bral jako primární a starý (single JSON v kořeni) jako deprecated.
+
+8. **Zapojit validace do CI**
+   - `tools/validate_data.py` a `tools/validate_intents.py`:
+     - Upravit tak, aby:
+       - validovaly nový formát (`domain.yaml`, `subdomains.yaml`, `_source/domains/*/intents/*.json`, `data/intents/*`).
+       - byly spustitelné z CI (GitHub Actions apod.).
+   - Přidat krátkou sekci do `docs/`:
+     - „Jak validovat data (lokálně i v CI).“
+
+### Dlouhodobé (čistší testy, dokumentace, refaktoring)
+
+9. **Refaktoring nástrojů v `tools/` a jejich dokumentace**
+
+   - Cíl:
+     - jednoznačný „happy path“ pro práci s doménami a intent daty:
+       1. Upravuji `_source/domains/traffic_law/...`.
+       2. Spustím `python tools/build_intents.py traffic_law`.
+       3. Ověřím `python tools/validate_intents.py`.
+       4. Spustím testy.
+   - V dokumentaci:
+     - Stručný „workflow pro produktového právníka“ (přidání nového intentu, nové domény).
+
+10. **Testy pro intent pipeline**
+    - Přidat unit testy a integrační test:
+      - test na `load_intents()` (na malé testovací sadě JSONů v `tests/data/intents`).
+      - test na build script (z `_source` sample → `data/intents`).
+      - test pro `intent_engine.run` na typických dotazech pro traffic_law (data‑driven testy, kde se očekává konkrétní intent_id/doména).
+
+11. **Provázání doménových pravidel s intent enginem**
+    - Dlouhodobě:
+      - když `intent_engine` vrátí `domain=&quot;traffic_law&quot;`, měl by se na úrovni core_legal/rule enginu využít příslušný `engines/domain_rules/*.yaml`.
+      - může být potřeba doplnit do `domain.yaml` referenci na konkrétní `domain_rules` soubor.
 
 ---
 
-### Co mi chybí / co by bylo dobré doplnit pro další iteraci analýzy
+Co není jasné / co bych potřeboval vidět pro přesnější návrhy
+-------------------------------------------------------------
 
-- Obsah souborů:
-  - `tools/generate_intents_from_domains.py`
-  - `tools/generate_intents_from_yaml.py`
-  - `tools/validate_intents.py`
-  - `runtime/domain_catalog.py`
-  - `docs/intent.system.md`, `docs/README_datova_architektura.md`, `docs/domain_catalog.md`, `docs/domain_map_traffic_law.md`
-- Ukázkový obsah jednoho `_source` intentu mimo traffic_law (např. `labor_termination.json`) – ověření, jak moc se liší od očekávaného `IntentDefinition`.
+- Obsah:
+  - `docs/intent.system.md` – definice datového modelu intentů a plánovaná pipeline.
+  - `docs/README_datova_architektura.md` – popis plánovaného vztahu `_source` ↔ `data/intents`.
+  - `runtime/domain_catalog.py` – jak dnes runtime vnímá seznam domén.
+  - `tools/generate_intents_from_domains.py` a `tools/generate_intents_from_yaml.py` – skutečná implementace cesty `_source → data/intents`.
+  - Pár typických `_source` intent JSONů (např. z `traffic_law/intents`) – zda už odpovídají `IntentDefinition`, nebo je potřeba mapovací logika.
 
-Jakmile tyto soubory budou k dispozici, lze:
-
-- přesně navrhnout rozhraní pro generátor `generate_intents_from_domains.py`,
-- navrhnout JSON schema pro intent definice,
-- vytvořit konkrétní checklist migrace pro každou doménu.
+Na základě těchto souborů bych mohl:
+- navrhnout přesný JSON/YAML schema pro domény a intenty,
+- navrhnout konkrétní implementaci `build_intents.py` (pseudokód a transformace polí),
+- lépe sladit `engines/domain_rules` s doménovým katalogem a intent enginem.
 ================================================================================
 </pre>
 </body>
