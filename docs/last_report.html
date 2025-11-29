@@ -44,152 +44,140 @@ ODPOVĚĎ CODING AGENTA:
 
 ## 1. Co chápu ze struktury projektu
 
-- Jde o jádrový framework „Právní strážce“:
-  - `runtime/` – orchestrátor, konfigurace, doménový katalog.
-  - `engines/` – jednotlivé enginy (core_legal, intent, judikatura, risk, safety, questions, output atd.).
-  - `llm/` – jednotný LLM klient + konfigurace.
-  - `data/_source/domains/**` – zdrojová data pro domény (vč. `traffic_law` – zde se generují/udržují intent-definice).
-  - `data/intents` (implicitně) – normalizované intent JSONy, které načítá `engines/intent.loader`.
-  - `tools/` – utility pro generování, validaci a „fix“ pipeline (např. `generate_intents_from_yaml.py`, `fix_intent_pipeline_v1.py`, `bootstrap_traffic_law_intents.py`).
-  - `docs/` – dokumentace k datové architektuře, doménám, intent systému, vč. `docs/domain_map_traffic_law.md`.
-  - `product/`, `packs/`, `templates/` – produktové konfigurace, bundly domén, šablony výstupů.
-  - `tests/` – testy pro runtime a enginy.
-
-Konkrétně pro úkol:
-- GitHub Actions mají fázi „Apply FIX script (traffic_law intents)“, která volá (přímo či nepřímo) `tools/bootstrap_traffic_law_intents.py` v režimu FIX.
-- Cílem je ověřit, že workflow skutečně spouští AKTUÁLNÍ verzi `bootstrap_traffic_law_intents.py` – proto chceme jednoduchý `print`, který se objeví v logu při režimu FIX.
-
-Soubor `tools/bootstrap_traffic_law_intents.py` zatím nemám zobrazený, ale víme, kde leží a že má shebang `#!/usr/bin/env python3` na prvním řádku.
+- Projekt je jádro backendového frameworku „Právní strážce“.
+- Logika je rozdělená do engine modulů (core_legal, judikatura, intent, risk, safety, domain_rules, …), orchestraci řeší `runtime.orchestrator`.
+- Domény a intenty:
+  - Doménová metadata a zdrojové intent definice jsou v `data/_source/domains/...`.
+  - Runtime verze intent definic pro klasifikaci se očekávají v `data/intents/*.json` (to používá `engines/intent/loader.py`).
+  - Pro traffic law už existují zdrojové YAML/JSON soubory pod `data/_source/domains/traffic_law/...`.
+  - Jsou k dispozici nástroje pro generování / validaci intentů (`tools/generate_intents_from_yaml.py`, `tools/bootstrap_traffic_law_intents.py`, `tools/validate_intents.py` atd.).
+- Testy:
+  - Existují integrační testy pro orchestrátor, domain_rules, judikaturu, core_legal, ale zatím žádný runtime test pro intent loader.
+- `engines/intent/loader.py`:
+  - Načítá JSONy z `data/intents/**`.
+  - Normalizuje je (_normalize_raw) na strukturu `IntentDefinition`.
+- `IntentDefinition` v `engines/intent/definition.py` má pole `domain` i `intent_group`, takže přes něj můžeme kontrolovat doménové pokrytí.
 
 ---
 
-## 2. Konkrétní kroky pro vývojáře
+## 2. Konkrétní návrh kroků k úkolu (test pro `load_intents()`)
 
-### 2.1. Aplikace požadované úpravy v `tools/bootstrap_traffic_law_intents.py`
+### 2.1. Minimální pomocný skript / runtime ověření
 
-1. Otevři soubor:
-   - `tools/bootstrap_traffic_law_intents.py`
+Pro rychlou manuální kontrolu (mimo testy) lze navrhnout jednoduchý skript do `engines/intent/loader.py` jako spustitelný blok pod `if __name__ == &quot;__main__&quot;:`:
 
-2. Najdi první řádek:
-   - `#!/usr/bin/env python3`
+1. Na konec `engines/intent/loader.py` přidat:
 
-3. HNED ZA tento řádek vlož přesně jeden nový řádek (nic jiného v souboru neměň):
    ```python
-   print(&quot;BOOTSTRAP_TEST_VERSION = v1&quot;)
+   if __name__ == &quot;__main__&quot;:
+       intents = load_intents()
+       print(f&quot;Načteno intentů: {len(intents)}&quot;)
+
+       domains = sorted({i.domain for i in intents})
+       print(&quot;Domény v načtených intentech:&quot;)
+       for d in domains:
+           print(f&quot; - {d}&quot;)
    ```
-   Poznámka:
-   - Syntaxe z uživatelského zadání `print(BOOTSTRAP_TEST_VERSION = v1)` by v Pythonu neprošla (chybí uvozovky, `print` keyword argument s mezerou, identifikátor není definován).
-   - Aby soubor byl spustitelný a GitHub Actions nepadaly na syntax error, je nutné tento řádek mírně zkorigovat na validní Python, ale zachovat text pro logy.  
-   - Doporučená podoba pro účely logu: `&quot;BOOTSTRAP_TEST_VERSION = v1&quot;`.
 
-4. Ulož změnu a spusť lokálně (pokud je to možné) skript ve stejném režimu, jak ho typicky pouští workflow (např.):
-   ```bash
-   python tools/bootstrap_traffic_law_intents.py --help
-   ```
-   nebo reálný FIX běh (pokud existuje dokumentovaný parametr v `docs/fix` / `.github/workflows`).
+   Tím se dá ručně ověřit:
+   - že `load_intents()` vrací nenulový seznam (výpis počtu),
+   - kolik intentů načte,
+   - jaké hodnoty `domain` existují.
 
-5. V Git diffu ověř, že:
-   - přibyl pouze jeden řádek,
-   - nic jiného v souboru se nezměnilo (žádné formátování, mezery atd.).
+   To je čistě pomocné, nemění chování importu ani testů.
 
-6. Pushni změny do větve, na kterou je navázáno GitHub Actions workflow pro FIX.
-
-7. V běhu GitHub Actions:
-   - Najdi fázi „Apply FIX script (traffic_law intents)“.
-   - Zkontroluj, že v logu této fáze se objeví řádek:
-     ```text
-     BOOTSTRAP_TEST_VERSION = v1
-     ```
-   - Pokud se neobjeví:
-     - workflow pravděpodobně nevolá tento skript, nebo používá jinou verzi (cache, jiný checkout, jiný path).
-     - viz kroky v části 2.2.
+&gt; Pokud nechcete upravovat production kód vůbec, lze totéž udělat jako malý standalone skript v `tools/` (např. `tools/debug_intent_loader.py`) – ale zadání dovoluje doplnit „minimální pomocný skript (nebo test)“, takže blok `__main__` v loaderu je v souladu.
 
 ---
 
-### 2.2. Pokud se řádek v logu neobjeví – diagnostika workflow
+### 2.2. Test `tests/test_intent_loader_runtime_minimal.py`
 
-Pokud po výše uvedené úpravě nevidíš `BOOTSTRAP_TEST_VERSION = v1` v logu:
+Soubor zatím v testech není, takže navrhuji ho vytvořit / aktualizovat přesně podle zadání:
 
-1. Zkontroluj `.github/workflows/**` (není v promptu, ale bude v repo):
-   - Najdi job/step s názvem „Apply FIX script (traffic_law intents)“.
-   - Ověř:
-     - jaký je `working-directory`,
-     - který příkaz se spouští (např. `python tools/bootstrap_traffic_law_intents.py ...` vs. volání přes nějaký wrapper).
+1. Vytvořit `tests/test_intent_loader_runtime_minimal.py` s tímto obsahem:
 
-2. Ověř, že workflow:
-   - používá aktuální checkout:
-     ```yaml
-     - uses: actions/checkout@v4
-       with:
-         fetch-depth: 0
-     ```
-   - neběží na starším commitu / jiné větvi.
+   ```python
+   from engines.intent.loader import load_intents
 
-3. Přidej do daného kroku workflow (dočasně, pokud to dává smysl) výpis obsahu adresáře:
-   ```yaml
-   - name: Debug ls
-     run: |
-       pwd
-       ls -R
+
+   def test_load_intents_basic_runtime():
+       # 1) Načtení intentů
+       intents = load_intents()
+
+       # 2) Musí vrátit nenulový seznam
+       assert isinstance(intents, list)
+       assert len(intents) &gt; 0, &quot;load_intents by měl vracet alespoň jeden intent&quot;
+
+       # 3) Získání domén ze všech načtených intentů
+       domains = {intent.domain for intent in intents}
+
+       # 4) Musí existovat traffic_law mezi doménami
+       assert (
+           &quot;traffic_law&quot; in domains
+       ), f&quot;Mezi doménami načtených intentů by měla být i &#x27;traffic_law&#x27;, ale domény jsou: {sorted(domains)}&quot;
    ```
-   - Ověř, že `tools/bootstrap_traffic_law_intents.py` je tam skutečně s očekávanou velikostí / timestampem.
 
-4. Pokud se ukáže, že se spouští jiný skript (např. `tools/fix_intent_pipeline_v1.py`, který teprve interně volá bootstrap skript), můžeš:
-   - doplnit podobný `print` i do této mezivrstvy,
-   - nebo přímo ověřit, že `fix_intent_pipeline_v1.py` importuje/spouští `bootstrap_traffic_law_intents.py` z očekávané cesty (relativní vs absolutní path).
+   Vysvětlení:
+   - Importuje `load_intents` z `engines.intent.loader`.
+   - Zavolá `load_intents()`.
+   - Assertuje, že:
+     - návratová hodnota je list,
+     - délka listu &gt; 0.
+   - Získá množinu `domain` z načtených `IntentDefinition`.
+   - Assertuje, že `&quot;traffic_law&quot;` je v množině domén.
+   - Chybová hláška vypíše aktuální domény pro snazší debug, pokud by test selhal (např. pokud nejsou vygenerované `data/intents/traffic_law_*.json`).
 
----
-
-### 2.3. Návrhy na drobná architektonická vylepšení kolem FIX/intent pipeline
-
-Tyto kroky nejsou součástí okamžitého úkolu, ale pomohou do budoucna s podobnou diagnostikou:
-
-1. **Standardizovaný „version banner“ pro všechny FIX/TOOLS skripty:**
-   - Do každého `tools/*.py`, který se používá ve workflow, přidat:
-     ```python
-     TOOL_NAME = &quot;bootstrap_traffic_law_intents&quot;
-     TOOL_VERSION = &quot;v1.0.0&quot;
-
-     if __name__ == &quot;__main__&quot;:
-         print(f&quot;[{TOOL_NAME}] starting, version={TOOL_VERSION}&quot;)
-         # ... main()
-     ```
-   - Workflow pak může jasně logovat, která verze nástroje běžela.
-
-2. **Centralizovaná konfigurace domén a intent pipeline:**
-   - V `docs/README_datova_architektura.md` a `docs/intent.system.md` doplnit:
-     - přesný popis jak `data/_source/domains/traffic_law/**` → `tools/bootstrap_traffic_law_intents.py` → `data/intents/*.json`.
-     - přehled FIX kroků, jak se spouští (ručně vs GitHub Actions).
-
-3. **Test, že FIX skripty jsou syntakticky v pořádku:**
-   - V `tests/` přidat jednoduchý test (např. `test_tools_import.py`), který:
-     ```python
-     import importlib
-
-     def test_import_bootstrap_traffic_law_intents():
-         importlib.import_module(&quot;tools.bootstrap_traffic_law_intents&quot;)
-     ```
-   - Tím se rychle odhalí syntaktické chyby při PR (např. špatný `print`).
+2. V rámci CI / lokálně:
+   - Před spuštěním testu je potřeba mít vygenerované runtime intent JSONy:
+     - buď ručně pomocí vhodného nástroje (např. `python tools/bootstrap_traffic_law_intents.py` nebo `python tools/generate_intents_from_yaml.py` – podle aktuálního workflow projektu),
+     - nebo mít už verzované JSONy v `data/intents/`.
+   - Pokud se spoléháte jen na `_source`, test by padal; proto je vhodné mít jasně zdokumentováno, že `data/intents` má být součástí repozitáře či build kroku.
 
 ---
 
-## 3. Co mi chybí / nejasnosti
+## 3. Architektura / domény / intents – drobná doporučení vyplývající z úkolu
 
-- Nevidím obsah `tools/bootstrap_traffic_law_intents.py`:
-  - Přesná signatura `main`/CLI režimu, zda používá argumenty pro režimy (CHECK/FIX/BOOTSTRAP apod.).
-  - Jestli má nějaký ochranný blok pro `__name__ == &quot;__main__&quot;` nebo se importuje jinde.
-- Nemám `.github/workflows/**`:
-  - Nevidím, jak přesně je definována fáze „Apply FIX script (traffic_law intents)“ (příkazy, path, working dir).
-- Neznám přesnou smluvenou konvenci pro režim „FIX“ (parametry, env proměnné).
+1. **Jasný „build step“ pro intenty:**
+   - V dokumentaci (`docs/intent.system.md` nebo `docs/README_datova_architektura.md`) uveďte sekci:
+     - jak se generuje `data/intents` z `data/_source/domains/**`,
+     - jaký příkaz je potřeba spustit před testy.
+   - Příklad:  
+     „Před spuštěním testů: `python tools/generate_intents_from_yaml.py` (nebo odpovídající skript), který vytvoří/aktualizuje `data/intents/*.json`.“
 
-Doporučený další krok: zobrazit obsah:
-- `tools/bootstrap_traffic_law_intents.py`
-- příslušného workflow z `.github/workflows/*.yml`
+2. **Validace konzistence domén:**
+   - Do existujících validačních nástrojů (`tools/validate_intents.py`) doplnit check, že:
+     - všechny `IntentDefinition.domain` existují v master seznamu domén (`data/schema/domains.json` nebo runtime/domain_catalog.py),
+     - tím se zachytí překlepy a zaručí, že test typu „mezi doménami je traffic_law“ má smysl.
 
-a případně podle toho upřesnit, zda není potřeba dát `print` jen do konkrétního režimu (např. když `--mode=fix`).
+3. **Oddělení runtime vs. source dat:**
+   - V dokumentaci krátce vyjasnit:
+     - `_source` = autoritativní zdroj (YAML/JSON), vhodný pro editaci domén a intentů,
+     - `data/intents` = runtime materializovaná podoba, kterou načítá `intent_engine`.
+
+---
+
+## 4. Co není jasné a co by stálo za upřesnění
+
+1. **Jak přesně vzniká `data/intents`:**
+   - Je to:
+     - plně verzované v Gitu, nebo
+     - generované v CI při build kroku, nebo
+     - generované ad-hoc lokálně?
+   - Od toho se odvíjí:
+     - zda testy mají spoléhat na existující soubory v repozitáři, nebo
+     - jestli by měly předem (v `conftest.py` nebo v CI skriptu) volat generovací nástroj.
+
+2. **Kanonický nástroj pro generování traffic_law intentů:**
+   - V `tools/` je více skriptů – není zřejmé, který je „ten pravý“ pro traffic_law:
+     - `tools/bootstrap_traffic_law_intents.py`
+     - `tools/generate_intents_from_yaml.py`
+   - Doporučení: v dokumentaci jasně označit:
+     - „Toto je hlavní nástroj pro generování runtime intentů ze zdrojových YAML/JSON.“
+
+Pokud tyto dvě věci upřesníte, můžu navrhnout i konkrétní hook do CI / test setupu (bez úprav produkčního kódu), který zajistí, že `tests/test_intent_loader_runtime_minimal.py` bude vždy běhat nad aktuální sadou intentů.
 ================================================================================
 Run type : FIX
-Timestamp (UTC) : 2025-11-29T17:08:44Z
+Timestamp (UTC) : 2025-11-29T17:13:06Z
 Task : Automatický bootstrap intentů pro traffic_law + sanity test
 ------------------------------------------------------------------------
 
