@@ -1,0 +1,52 @@
+name: Run Tool
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Jméno Python skriptu v tools/ (např. validate_runtime_intents.py)"
+        required: true
+      args:
+        description: "Volitelné parametry pro skript (např. --domain traffic_law)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  run-tool:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Validate script path
+        run: |
+          if [ ! -f "tools/${{ inputs.script }}" ]; then
+            echo "ERROR: tools/${{ inputs.script }} not found."
+            exit 1
+          fi
+
+      - name: Run selected tool
+        run: |
+          echo "=============================================================="
+          echo " RUNNING: tools/${{ inputs.script }} ${{ inputs.args }}"
+          echo "=============================================================="
+          echo ""
+          python "tools/${{ inputs.script }}" ${{ inputs.args }}
+
+      - name: Done
+        run: echo "Tool finished successfully."
