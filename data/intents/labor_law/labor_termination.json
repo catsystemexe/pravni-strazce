@@ -34,6 +34,8 @@
     "obcansky_zakonik",
     "zakon_o_inspekci_prace"
   ],
+  "keywords": [],
+  "negative_keywords": [],
   "conclusion_skeletons": {
     "low": "Z dostupnych informaci nelze posoudit, zda byla vypoved nebo jiny ukon platny. Je nutne doplnit listiny a casovou osu.",
     "medium": "Uvedeny duvod se jevi jako sporny nebo nedostatecne odduvodneny. Doporucuji shromazdit dukazy a zvazit podani namitek nebo zaloby na neplatnost.",

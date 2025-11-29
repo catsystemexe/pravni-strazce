@@ -36,6 +36,8 @@
     "zakon_o_socialne_pravnich_ochranach_deti",
     "listina_zakladnich_prav_a_svobod"
   ],
+  "keywords": [],
+  "negative_keywords": [],
   "conclusion_skeletons": {
     "low": "Informace o povaze obvineni a postupu policie jsou nedostatecne. Je nutne ziskat zakladni listiny (usneseni, protokoly) a upresnit situaci.",
     "medium": "Z dostupnych udaju vyplyvaji rozpory v dukazech nebo pochybnosti o primerenosti postupu organu cinnych v trestnim rizeni. Doporucuji aktivne resit obhajobu a dokumentovat vsechny kroky.",

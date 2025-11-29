@@ -5,10 +5,22 @@ from typing import Any, Dict, List, Optional
 from engines.shared_types import EngineInput, EngineOutput
 from .loader import load_intents, IntentDefinition
 from llm.client import LLMClient, LLMMessage
-
+import unicodedata
 
 def _lower(s: str | None) -> str:
     return (s or "").lower()
+
+
+
+def _normalize(s: str) -> str:
+    """lowercase + remove diacritics"""
+    if not s:
+        return ""
+    s = s.lower()
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s)
+        if unicodedata.category(c) != "Mn"
+    )
 
 
 # -----------------------------
@@ -68,7 +80,7 @@ def _heuristic_classify(user_query: str) -> Dict[str, Any]:
         "max_domain_score": int,
     }
     """
-    text = _lower(user_query)
+    text = _normalize(user_query)
 
     intent_scores: Dict[str, int] = {}
     domain_scores: Dict[str, int] = {}
@@ -83,16 +95,15 @@ def _heuristic_classify(user_query: str) -> Dict[str, Any]:
         negative_keywords = getattr(intent_def, "negative_keywords", None) or []
 
         # pozitivní klíčová slova
-        for kw in keywords:
-            kw_l = kw.lower()
-            if kw_l in text:
+        for kw in intent_def.keywords:
+            kw_norm = _normalize(kw)
+            if kw_norm in text:
                 score += 1
-                if kw not in matched_keywords:
-                    matched_keywords.append(kw)
+                matched_keywords.append(kw)
 
         # negativní klíčová slova – penalizace, aby se intent nechytil omylem
-        for neg in negative_keywords:
-            if neg.lower() in text:
+        for neg in intent_def.negative_keywords:
+            if _normalize(neg) in text:
                 score -= 2
 
         if score <= 0:

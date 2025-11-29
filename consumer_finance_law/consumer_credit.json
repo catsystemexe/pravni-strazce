@@ -35,6 +35,8 @@
     "zakon_o_spotrebitelskem_uveru",
     "zakon_o_financnim_arbitrovi"
   ],
+  "keywords": [],
+  "negative_keywords": [],
   "conclusion_skeletons": {
     "low": "Dostupne informace jsou nedostatecne pro jednoznacny zaver. Je nutne doplnit smlouvu, obchodni podminky a casovou osu vyzev.",
     "medium": "Na zaklade dostupnych informaci se jevi nektera ujednani jako sporna nebo neprimerena. Doporucuji shromazdit dokumenty, pripravit pisemne namitky a zvazit podani navrhu k financnimu arbitrovi.",

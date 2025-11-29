@@ -32,6 +32,10 @@
     "spravni_rad",
     "zakon_o_odpovednosti_za_prestupky"
   ],
+
+  "keywords": [],
+  "negative_keywords": [],
+  
   "conclusion_skeletons": {
     "low": "Neni k dispozici dost informaci o obsahu a doruceni rozhodnuti. Bez techto udaju nelze navrhnout konkretni argumentaci.",
     "medium": "Je pravdepodobne, ze rozhodnuti trpi procesnimi vadami nebo nedostatecnym odduvodnenim. Doporucuji pripravit strukturovane odvolani a navrhnout doplneni dokazovani.",
