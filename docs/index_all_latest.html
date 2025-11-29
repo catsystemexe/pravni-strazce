@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Právní strážce – poslední logy agenta</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 2rem;
+            line-height: 1.5;
+            background: #020617;
+            color: #e5e7eb;
+        }
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            color: #9ca3af;
+            max-width: 40rem;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: #0f172a;
+            border-radius: 0.75rem;
+            border: 1px solid #1f2937;
+            padding: 1.25rem 1.5rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        .card h2 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1.1rem;
+        }
+        .card p {
+            margin: 0.25rem 0 0.75rem 0;
+            font-size: 0.9rem;
+            color: #9ca3af;
+        }
+        .card a {
+            display: inline-block;
+            padding: 0.45rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid #38bdf8;
+            text-decoration: none;
+            font-size: 0.9rem;
+            color: #e0f2fe;
+            background: radial-gradient(circle at top left, #0ea5e9 0, #0f172a 55%);
+        }
+        .card a:hover {
+            border-color: #7dd3fc;
+        }
+        footer {
+            margin-top: 2rem;
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+        code {
+            background: #020617;
+            padding: 0.1rem 0.3rem;
+            border-radius: 0.25rem;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Právní strážce – poslední logy agenta</h1>
+    <p>
+        Rychlý rozcestník na poslední běhy coding agenta. Každý odkaz vede na
+        <strong>latest</strong> HTML log daného typu, generovaný z adresáře
+        <code>docs/logs</code>.
+    </p>
+
+    <div class="grid">
+        <div class="card">
+            <h2>🔍 Analysis run</h2>
+            <p>Poslední běh zaměřený na analýzu architektury, kódu nebo dat.</p>
+            <a href="logs/analysis/latest.html">Otevřít poslední analysis log</a>
+        </div>
+
+        <div class="card">
+            <h2>🛠️ Fix run</h2>
+            <p>Poslední běh, kde agent navrhoval nebo aplikoval opravy v kódu či struktuře.</p>
+            <a href="logs/fix/latest.html">Otevřít poslední fix log</a>
+        </div>
+
+        <div class="card">
+            <h2>✅ Check run</h2>
+            <p>Poslední běh zaměřený na kontrolu a validaci (testy, lint, schémata).</p>
+            <a href="logs/check/latest.html">Otevřít poslední check log</a>
+        </div>
+
+        <div class="card">
+            <h2>🧩 Global latest</h2>
+            <p>Úplně poslední log jakéhokoliv typu (analysis / fix / check).</p>
+            <a href="last_report.html">Otevřít globální last_report</a>
+        </div>
+    </div>
+
+    <footer>
+        GitHub Pages: tato stránka je v <code>docs/index_all_latest.html</code>.<br>
+        URL bude typicky: <code>/pravni-strazce/index_all_latest.html</code>.
+    </footer>
+</body>
+</html>
