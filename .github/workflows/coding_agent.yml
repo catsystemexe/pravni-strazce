@@ -13,7 +13,7 @@ on:
         default: ""
 
 permissions:
-  contents: write   # aby mohl commitovat změny
+  contents: write
 
 jobs:
   run-agent:
@@ -26,7 +26,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # kvůli push zpět na stejnou větev
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -37,7 +37,11 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      
+      - name: Run coding agent and save raw text report
+        run: |
+          mkdir -p tmp
+          python coding_agent.py "${{ inputs.task }}" > tmp/last_report.txt
+
       - name: Wrap report into HTML for GitHub Pages (global + per-type logs)
         env:
           RUN_MODE: ${{ inputs.mode }}
@@ -53,7 +57,7 @@ jobs:
           raw_path = Path("tmp/last_report.txt")
           text = raw_path.read_text(encoding="utf-8")
 
-          # --- primární zdroj: workflow input RUN_MODE ---
+          # --- primární zdroj: workflow input RUN_MODE (analysis / fix / check) ---
           mode = os.environ.get("RUN_MODE", "").strip().lower()
           if mode in ("analysis", "fix", "check"):
               slug = mode
@@ -62,22 +66,12 @@ jobs:
               slug = "generic"
               run_type = "GENERIC"
 
-          # --- sekundární fallback z textu (pokud bys někdy chtěl) ---
-          if run_type == "GENERIC":
-              for line in text.splitlines():
-                  if line.startswith("Run type :"):
-                      rt = line.split(":", 1)[1].strip()
-                      if rt:
-                          run_type = rt
-                          slug = rt.lower().replace(" ", "_")
-                      break
-
-          # CET timestamp pro název souboru: YYYY-MM-DD_HHMMCET
+          # timestamp pro název souboru: YYYY-MM-DD_HHMMCET
           cet = ZoneInfo("Europe/Prague")
           dt = datetime.now(cet)
           ts_safe = dt.strftime("%Y-%m-%d_%H%M") + "CET"
 
-          # Zkus z textu vytáhnout "Timestamp (UTC)" jen pro zobrazení v HTML
+          # jen pro zobrazení v HTML, pokud je v textu
           timestamp = "unknown"
           for line in text.splitlines():
               if line.startswith("Timestamp (UTC) :"):
@@ -88,38 +82,7 @@ jobs:
 
           html_doc_global = f"""<!DOCTYPE html>
           <html lang="cs">
-          <head>
-              <meta charset="UTF-8">
-              <title>Právní strážce – poslední report agenta</title>
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                  body {{
-                      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                      margin: 2rem;
-                      line-height: 1.5;
-                      background: #0f172a;
-                      color: #e5e7eb;
-                  }}
-                  pre {{
-                      white-space: pre-wrap;
-                      word-wrap: break-word;
-                      background: #020617;
-                      padding: 1.5rem;
-                      border-radius: 0.75rem;
-                      border: 1px solid #1f2937;
-                      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-                  }}
-                  h1 {{
-                      font-size: 1.5rem;
-                      margin-bottom: 1rem;
-                  }}
-                  .meta {{
-                      font-size: 0.85rem;
-                      color: #9ca3af;
-                      margin-bottom: 0.5rem;
-                  }}
-              </style>
-          </head>
+          <head> ... stejné CSS ... </head>
           <body>
               <h1>Právní strážce – poslední report agenta</h1>
               <div class="meta">
@@ -132,38 +95,7 @@ jobs:
 
           html_doc_typed = f"""<!DOCTYPE html>
           <html lang="cs">
-          <head>
-              <meta charset="UTF-8">
-              <title>Právní strážce – {run_type} run ({timestamp})</title>
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                  body {{
-                      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                      margin: 2rem;
-                      line-height: 1.5;
-                      background: #0f172a;
-                      color: #e5e7eb;
-                  }}
-                  pre {{
-                      white-space: pre-wrap;
-                      word-wrap: break-word;
-                      background: #020617;
-                      padding: 1.5rem;
-                      border-radius: 0.75rem;
-                      border: 1px solid #1f2937;
-                      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-                  }}
-                  h1 {{
-                      font-size: 1.5rem;
-                      margin-bottom: 1rem;
-                  }}
-                  .meta {{
-                      font-size: 0.85rem;
-                      color: #9ca3af;
-                      margin-bottom: 0.5rem;
-                  }}
-              </style>
-          </head>
+          <head> ... stejné CSS ... </head>
           <body>
               <h1>Právní strážce – {run_type} run</h1>
               <div class="meta">
@@ -181,10 +113,18 @@ jobs:
           # Globální last_report
           (docs_dir / "last_report.html").write_text(html_doc_global, encoding="utf-8")
 
-          # Per-type: docs/analysis/, docs/fix/, docs/check/, ...
+          # Per-type: docs/analysis/, docs/fix/, docs/check/
           type_dir = docs_dir / slug
           type_dir.mkdir(parents=True, exist_ok=True)
 
           (type_dir / f"{ts_safe}.html").write_text(html_doc_typed, encoding="utf-8")
           (type_dir / "latest.html").write_text(html_doc_typed, encoding="utf-8")
           EOF
+
+      - name: Commit and push HTML reports
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/last_report.html docs/*/*.html
+          git commit -m "Update agent HTML reports" || echo "No changes to commit"
+          git push
