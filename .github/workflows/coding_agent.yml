@@ -41,7 +41,13 @@ jobs:
         run: |
           mkdir -p tmp
           python coding_agent.py "${{ inputs.task }}" > tmp/last_report.txt
-
+    
+      - name: Apply FIX script (traffic_law intents)
+        if: ${{ inputs.mode == 'fix' }}
+        run: |
+          # append výstup fix skriptu za report coding agenta
+          python tools/fix_intent_pipeline_v1.py >> tmp/last_report.txt
+    
       - name: Wrap report into HTML for GitHub Pages (global + per-type logs)
         env:
           RUN_MODE: ${{ inputs.mode }}
