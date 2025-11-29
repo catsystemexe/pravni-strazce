@@ -50,3 +50,11 @@ jobs:
 
       - name: Done
         run: echo "Tool finished successfully."
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/intents/traffic_law/*.json
+          git commit -m "Fix traffic law intent IDs" || echo "No changes to commit"
+          git push
