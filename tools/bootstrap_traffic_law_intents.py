@@ -11,6 +11,8 @@ Jednoduchý bootstrap pro traffic_law:
 
 Bez importu z `engines.*` – je to čistý datový kopírovací krok.
 """
+print("BOOTSTRAP_VERSION = traffic_law_v3_no_engines")
+
 
 from pathlib import Path
 import json
