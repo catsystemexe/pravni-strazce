@@ -9,10 +9,16 @@ on:
         default: "Úkol:"
 
 permissions:
-  contents: write   # aby mohl commitovat změny
+  contents: read        # už nemusíme nic commitovat
+  pages: write          # právo deploynout Pages
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
-  run-agent:
+  build:
     runs-on: ubuntu-latest
 
     env:
@@ -21,8 +27,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # kvůli push zpět na stejnou větev
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -45,11 +49,9 @@ jobs:
           from pathlib import Path
           import html
 
-          # načti čistý text reportu od agenta
           raw_path = Path("tmp/last_report.txt")
           text = raw_path.read_text(encoding="utf-8")
 
-          # jednoduchá HTML šablona – nic fancy, jen aby to šlo načíst jako stránka
           body = f"<pre>{html.escape(text)}</pre>"
 
           html_doc = f"""<!DOCTYPE html>
@@ -95,13 +97,23 @@ jobs:
           """
 
           out_path = Path("docs/last_report.html")
+          out_path.parent.mkdir(parents=True, exist_ok=True)
           out_path.write_text(html_doc, encoding="utf-8")
           EOF
 
-      - name: Commit and push last_report.html
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/last_report.html
-          git commit -m "Update last agent report (HTML for GitHub Pages)" || echo "No changes to commit"
-          git push
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
