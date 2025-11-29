@@ -5,16 +5,31 @@ from pathlib import Path
 import json
 from typing import Any, Dict
 
-# --- zajisti, že se najde balíček "engines" i při běhu z GitHub Actions ---
-ROOT = Path(__file__).resolve().parents[1]  # .../pravni-strazce/pravni-strazce
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+# --- Najdi kořen projektu podle adresáře "engines" a přidej ho na sys.path ---
+
+THIS_FILE = Path(__file__).resolve()
+PROJECT_ROOT: Path | None = None
+
+for parent in THIS_FILE.parents:
+    if (parent / "engines").is_dir():
+        PROJECT_ROOT = parent
+        break
+
+if PROJECT_ROOT is None:
+    raise RuntimeError(
+        f"Nelze najít kořen projektu s adresářem 'engines' (start: {THIS_FILE})"
+    )
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+# --- teď už můžeme importovat interní moduly ---
 
 from engines.intent.loader import _normalize_raw
 from engines.intent.definition import IntentDefinition
 
-SOURCE_DIR = ROOT / "data" / "_source" / "domains" / "traffic_law" / "intents"
-TARGET_DIR = ROOT / "data" / "intents" / "traffic_law"
+SOURCE_DIR = PROJECT_ROOT / "data" / "_source" / "domains" / "traffic_law" / "intents"
+TARGET_DIR = PROJECT_ROOT / "data" / "intents" / "traffic_law"
 
 
 def _ensure_target_dir() -> None:
@@ -48,7 +63,8 @@ def _normalize_source_intent(raw: Dict[str, Any], filename_stem: str) -> Dict[st
 
 def bootstrap_traffic_law_intents() -> int:
     """
-    Vygeneruje data/intents/traffic_law/*.json z data/_source/domains/traffic_law/intents/*.json.
+    Vygeneruje data/intents/traffic_law/*.json z
+    data/_source/domains/traffic_law/intents/*.json.
     Je idempotentní – opakované spuštění jen přepíše existující soubory.
     """
     _ensure_target_dir()
