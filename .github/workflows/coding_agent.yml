@@ -45,9 +45,9 @@ jobs:
       - name: Apply FIX script (traffic_law intents)
         if: ${{ inputs.mode == 'fix' }}
         run: |
-          # append výstup fix skriptu za report coding agenta
-          python tools/fix_intent_pipeline_v1.py >> tmp/last_report.txt
+          python tools/fix_create_intent_runtime_dirs.py >> tmp/last_report.txt
 
+    
       - name: Wrap report into HTML for GitHub Pages (global + per-type logs)
         env:
           RUN_MODE: ${{ inputs.mode }}
