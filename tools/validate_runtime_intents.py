@@ -176,4 +176,24 @@ def main() -> int:
                     seen_intent_ids[intent_id] = json_path
 
     if all_errors:
+    if all_errors:
+        print("========================================")
+        print("RUNTIME INTENTS VALIDATION – ERRORS FOUND")
+        print("========================================")
+        for err in all_errors:
+            print(f"- {err}")
+        print()
+        print(f"Total errors: {len(all_errors)}")
+        return 1
+
+    print("========================================")
+    print("RUNTIME INTENTS VALIDATION – OK")
+    print("========================================")
+    print(f"Checked {len(seen_intent_ids)} intents in {RUNTIME_DIR}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+    
         
