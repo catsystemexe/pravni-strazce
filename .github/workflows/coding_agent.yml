@@ -45,8 +45,11 @@ jobs:
       - name: Apply FIX script (traffic_law intents)
         if: ${{ inputs.mode == 'fix' }}
         run: |
+          # 1) zajisti adresářovou strukturu (data/intents/<domain>/.keep)
           python tools/fix_create_intent_runtime_dirs.py >> tmp/last_report.txt
 
+          # 2) zkopíruj/aktualizuj runtime intenty pro traffic_law
+          python tools/bootstrap_traffic_law_intents.py >> tmp/last_report.txt
     
       - name: Wrap report into HTML for GitHub Pages (global + per-type logs)
         env:
