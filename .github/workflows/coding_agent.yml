@@ -1,4 +1,48 @@
-      - name: Wrap report into HTML for GitHub Pages (global + per-type logs)
+name: Coding agent – Právní strážce
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Režim běhu: analysis / fix / check"
+        required: true
+        default: "analysis"
+      task:
+        description: "Úkol pro coding agenta (česky)"
+        required: true
+        default: ""
+
+permissions:
+  contents: write   # aby mohl commitovat změny
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # kvůli push zpět na stejnou větev
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run coding agent and save raw text report
+        run: |
+          mkdir -p tmp
+          python coding_agent.py "${{ inputs.task }}" > tmp/last_report.txt
+
+            - name: Wrap report into HTML for GitHub Pages (global + per-type logs)
         env:
           RUN_MODE: ${{ inputs.mode }}
         run: |
@@ -148,3 +192,11 @@
           (type_dir / f"{ts_safe}.html").write_text(html_doc_typed, encoding="utf-8")
           (type_dir / "latest.html").write_text(html_doc_typed, encoding="utf-8")
           EOF
+
+      - name: Commit and push HTML reports
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/last_report.html docs/*/*.html
+          git commit -m "Update agent HTML reports" || echo "No changes to commit"
+          git push
