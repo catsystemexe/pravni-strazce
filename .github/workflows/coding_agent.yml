@@ -6,19 +6,13 @@ on:
       task:
         description: "Úkol pro coding agenta (česky)"
         required: true
-        default: "Úkol:"
+        default: ""
 
 permissions:
-  contents: read        # už nemusíme nic commitovat
-  pages: write          # právo deploynout Pages
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  contents: write   # aby mohl commitovat změny
 
 jobs:
-  build:
+  run-agent:
     runs-on: ubuntu-latest
 
     env:
@@ -27,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # kvůli pull/push na main
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -90,30 +86,31 @@ jobs:
           </head>
           <body>
               <h1>Právní strážce – poslední report agenta</h1>
-              <div class="meta">Tento soubor generuje GitHub Action z repozitáře catsystemexe/pravni-strazce.</div>
+              <div class="meta">
+                Tento soubor generuje GitHub Action z repozitáře catsystemexe/pravni-strazce.
+              </div>
               {body}
           </body>
           </html>
           """
 
           out_path = Path("docs/last_report.html")
-          out_path.parent.mkdir(parents=True, exist_ok=True)
           out_path.write_text(html_doc, encoding="utf-8")
           EOF
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
+      - name: Commit and push last_report.html
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+          # pro jistotu stáhnout poslední změny, aby push nepadal na "fetch first"
+          git fetch origin main
+          git pull --rebase origin main || true
 
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          git add docs/last_report.html tmp/last_report.txt || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update last agent report (HTML for GitHub Pages)"
+            git push origin HEAD:main
+          fi
