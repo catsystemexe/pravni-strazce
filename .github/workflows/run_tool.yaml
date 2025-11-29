@@ -3,16 +3,22 @@ name: Run Tool
 on:
   workflow_dispatch:
     inputs:
-      script:
-        description: "Jméno Python skriptu v tools/ (např. validate_runtime_intents.py)"
+      script_path:
+        description: "Path to Python script (relative to repo root, e.g. tools/validate_runtime_intents.py)"
         required: true
-      args:
-        description: "Volitelné parametry pro skript (např. --domain traffic_law)"
+        default: "tools/validate_runtime_intents.py"
+      script_args:
+        description: "Arguments to pass to the script (optional)"
         required: false
         default: ""
+      allow_commit:
+        description: "Commit and push changes? (yes/no)"
+        required: false
+        default: "no"
 
+# nutné pro git push
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   run-tool:
@@ -22,39 +28,53 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.12"
 
-      - name: Install dependencies
+      - name: Install dependencies (if requirements.txt exists)
+        if: ${{ hashFiles('requirements.txt') != '' }}
         run: |
           pip install -r requirements.txt
 
       - name: Validate script path
         run: |
-          if [ ! -f "tools/${{ inputs.script }}" ]; then
-            echo "ERROR: tools/${{ inputs.script }} not found."
+          echo "Validating script path: ${{ github.event.inputs.script_path }}"
+          if [ ! -f "${{ github.event.inputs.script_path }}" ]; then
+            echo "ERROR: Script not found: ${{ github.event.inputs.script_path }}"
             exit 1
           fi
 
       - name: Run selected tool
         run: |
-          echo "=============================================================="
-          echo " RUNNING: tools/${{ inputs.script }} ${{ inputs.args }}"
-          echo "=============================================================="
-          echo ""
-          python "tools/${{ inputs.script }}" ${{ inputs.args }}
+          echo "========================================"
+          echo "RUNNING: ${{ github.event.inputs.script_path }} ${{ github.event.inputs.script_args }}"
+          echo "========================================"
+          python "${{ github.event.inputs.script_path }}" ${{ github.event.inputs.script_args }}
 
-      - name: Done
-        run: echo "Tool finished successfully."
-
-      - name: Commit changes
+      - name: Show git status
         run: |
+          echo "--------- GIT STATUS (after script) ---------"
+          git status
+          echo "---------------------------------------------"
+
+      - name: Commit and push changes (optional)
+        if: ${{ github.event.inputs.allow_commit == 'yes' }}
+        run: |
+          set -e
+
+          # pokud nic nezměněno, skonči klidně
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/intents/traffic_law/*.json
-          git commit -m "Fix traffic law intent IDs" || echo "No changes to commit"
-          git push
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "Run tool: ${{ github.event.inputs.script_path }} ${{ github.event.inputs.script_args }}"
+          git push origin "${GITHUB_REF_NAME}"
