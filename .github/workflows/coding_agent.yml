@@ -179,13 +179,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # přidej HTML reporty
-          git add docs/last_report.html docs/*/*.html
+          # HTML reporty (vždy)
+          git add docs/last_report.html docs/*/*.html || true
 
-          # přidej i vygenerované runtime intenty (zatím jen traffic_law)
+          # runtime intenty pro traffic_law – jen pokud opravdu existují
           if [ -d "data/intents/traffic_law" ]; then
-          git add data/intents/traffic_law/*.json
+          if ls data/intents/traffic_law/*.json >/dev/null 2>&1; then
+              git add data/intents/traffic_law/*.json
+            fi
           fi
 
           git commit -m "Update agent HTML reports and traffic_law intents" || echo "No changes to commit"
-          git push
+           git push
