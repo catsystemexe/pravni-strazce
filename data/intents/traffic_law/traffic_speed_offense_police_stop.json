@@ -1,0 +1,61 @@
+{
+  "basic_questions": [
+    "Šlo o blokovou pokutu nebo oznámení o přestupku?",
+    "Byl předložen důkaz o měření?",
+    "Byl přestupek přiznán nebo popřen?",
+    "Byl dán příkaz na místě?",
+    "Hrozí body?"
+  ],
+  "conclusion_skeletons": {
+    "high": "Postup policie může být vadný – vhodné napadnout postup.",
+    "low": "Je nutné doplnit podrobnosti o zastavení.",
+    "medium": "Situace je běžná – doporučuji zkontrolovat blok a poučení."
+  },
+  "description_cs": "Řidič byl zastaven policií kvůli rychlosti. Může jít o blokovou pokutu, poučení, nebo zahájení správního řízení.",
+  "domain": "traffic_law",
+  "examples": [
+    "Zastavila mě policie a dali mi blokovou pokutu. Co s tím?",
+    "Policista tvrdí, že jsem jel rychle, ale nic mi neukázal.",
+    "Můžu odmítnout podepsat blokovou pokutu?"
+  ],
+  "intent_id": "traffic_speed_offense_police_stop",
+  "keywords": [
+    "policie mě zastavila",
+    "zastavili mě kvůli rychlosti",
+    "policista měřil rychlost",
+    "bloková pokuta",
+    "příkaz na místě"
+  ],
+  "label_cs": "Rychlost – zastavení policií",
+  "negative_keywords": [
+    "alkohol",
+    "nehoda"
+  ],
+  "normative_references": [
+    "zakon_o_silnicnim_provozu",
+    "spravni_rad"
+  ],
+  "risk_patterns": [
+    {
+      "dimensions": [
+        "authority"
+      ],
+      "pattern": "neukazal"
+    },
+    {
+      "dimensions": [
+        "procedural"
+      ],
+      "pattern": "prikaz.*miste"
+    }
+  ],
+  "safety_questions": [
+    "Běží lhůta pro odpor?",
+    "Hrozí zákaz řízení?"
+  ],
+  "subdomains": [
+    "speeding",
+    "police_interaction"
+  ],
+  "version": "1.0.0"
+}

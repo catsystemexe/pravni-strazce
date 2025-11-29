@@ -42,258 +42,239 @@
     <pre>================================================================================
 ODPOVĚĎ CODING AGENTA:
 
-## 1. Co z projektu chápu
+## 1. Co chápu ze struktury projektu
 
-- Jádro je právní pipeline (`runtime/orchestrator.run_pipeline`), která:
-  - přijme dotaz,
-  - přes intent engine určí intent/doménu,
-  - přes core_legal engine vytvoří právní IRAC skeleton,
-  - přes risk/judikaturu/safety/output poskládá finální odpověď.
+1. **Celková architektura**
+   - Jádro tvoří `runtime/orchestrator.py` a jednotlivé enginy v `engines/`.
+   - Doménová/intent logika je **data‑driven**: JSON/yaml v `data/` + enginy, které nad tím dělají klasifikaci a IRAC skeleton (`engines/core_legal`).
+   - LLM je zabalené v `llm/` s konfigem v `llm/config.yaml`, defaultně běží **mock**, real OpenAI jen při `LLM_BACKEND=openai`.
 
-- Domény a intents:
-  - Doménová pravidla (spíše high‑level) jsou v `engines/domain_rules/*.yaml`.
-  - Detailní právní doménová data + intents jsou v `data/_source/domains/**` – např. traffic_law má:
-    - `domain.yaml`, `subdomains.yaml`,
-    - několik konkrétních intent JSONů pro přestupky rychlosti.
-  - Intent engine ale čte pouze `data/intents/*.json` přes `engines/intent/loader.py`.
-    - `IntentDefinition` má bohaté schéma (keywords, safety_questions, conclusion_skeletons atd.).
-    - Loader očekává finalizované JSONy v `data/intents`, ne `_source`.
-  - V `tools/` jsou utility pro generování intentů z domén (`generate_intent_from_domains.py`, `generate_intents_from_yaml.py`, `bootstrap_traffic_law_intents.py`) – tedy existuje plánovaný „build“ krok z `_source` → runtime intents.
+2. **Domény**
+   - High‑level domény jsou popsány ve `data/schema/domains.json` a v YAML pro domain_rules (`engines/domain_rules/*.yaml`).
+   - Každá doména má navíc **detailnější strukturu** v `data/_source/domains/&lt;domain&gt;/` (např. `administrative_law/appeal_admin_decision.json`, `criminal_law/criminal_defense.json` atd.).
+   - Pro **traffic law** existuje vlastní složka:
+     - `data/_source/domains/traffic_law/domain.yaml` – hlavní metadata/doménová definice.
+     - `data/_source/domains/traffic_law/subdomains.yaml` – strom poddomén (přestupky, provoz, sankce…).
+     - `data/_source/domains/traffic_law/readme.md` – doménová dokumentace.
+     - `data/_source/domains/traffic_law/intents/*.json` – zdrojové intent definice v této doméně, včetně konkrétní skupiny „traffic_speed_offense_*“.
+   - Z `_source/domains` se pravděpodobně generují **produkční intent JSONy** do `data/intents/&lt;domain&gt;/` pomocí nástrojů v `tools/` (`generate_intents_from_yaml.py`, `bootstrap_traffic_law_intents.py`, atd.).
 
-- LLM:
-  - `llm/client.py` poskytuje jednotný `LLMClient` a volbu modelu podle `use_case`.
-  - Intent engine má fallbackový LLM doplněk (když je confidence nízká), ale zatím používá inline system prompt, ne šablonu z `engines/intent/prompts/intent_classification.md`.
+3. **Intent systém**
+   - Formální schéma intentu je v `engines/intent/definition.py` (`IntentDefinition`).
+   - `engines/intent/loader.py` načítá **všechny** JSONy z `data/intents/**` a normalizuje je:
+     - `id` → `intent_id`,
+     - doplní `keywords` a `negative_keywords` pokud chybí,
+     - zahodí neznáme klíče (srovnává s whitelistem `valid_fields`).
+   - `engines/intent/engine.py`:
+     - pomocí `_heuristic_classify` provádí **heuristickou klasifikaci** na základě `keywords/negative_keywords`,
+     - vrací `intent`, `domain`, `intent_group`, `confidence` a raw skóre,
+     - při nízké jistotě a backendu `openai` může volitelně použít LLM (zatím s fixním system promptem).
 
-- Dokumentace:
-  - `docs/intent.system.md`, `docs/domain_catalog.md`, `docs/domain_map_traffic_law.md`, `docs/README_datova_architektura.md` popisují koncepty, ale jejich obsah tu nevidím.
+4. **Dokumentace a nástroje**
+   - `docs/intent.system.md` – high‑level popis, jak funguje intent systém (předpokládám včetně pipeline `_source → data/intents`).
+   - `docs/domain_map_traffic_law.md` – specificky mapování pro dopravní právo (tj. jak se traffic law doména promítá do intent slovníku).
+   - `tools/bootstrap_traffic_law_intents.py` – nástroj pro bootstrap/generaci intentů pro dopravní právo z YAML/šablon.
+   - `tools/validate_intents.py`, `tools/validate_data.py`, `tools/generate_intents_from_yaml.py` – kontrola konzistence a generování.
 
-- Produktová vrstva:
-  - `product/e_advokat_pro/*.yaml` – produktové nastavení (risk policy, licensing) oddělené od core.
-
-Celkově: existují tři „patra“ pro intents/domény:
-1. `_source` (doménové yaml/json) – lidsky udržovatelná pravda.
-2. build nástroje v `tools/` – generují runtime datové struktury (intents).
-3. runtime struktury – `data/intents/*.json` + `engines/intent.*`.
-
-
----
-
-## 2. Co mi chybí / není jasné
-
-1. **Aktuální stav adresáře `data/intents`**  
-   - Ve výpisu repa žádné `data/intents` nevidím.  
-   - Intent engine ale očekává, že tam JSONy jsou.  
-   → Není jasné, zda:
-   - existuje generovací krok (např. `make build-intents`), který vytváří `data/intents` z `_source`,  
-   - jak přesně vypadá cílový JSON formát (máme jen `_source` příklady a `_template/intent_template.json`).
-
-2. **Obsah `docs/intent.system.md` a datového template**  
-   - Potřeboval bych vidět:
-     - jaká je oficiální minimální/ideální struktura intentu,
-     - jak se mají mapovat `_source/domains/*` na `IntentDefinition`.
-
-3. **Jak je nyní intent engine zapojen v pipeline**  
-   - Soubor orchestrace (`runtime/orchestrator.py`) tu nemám, takže nevidím:
-     - jak se výstup intent enginu propisuje do `core_legal` (meta.domain/meta.intent),
-     - jestli se používají subdomény, intent_group, risk_patterns atd.
-
-4. **Bootstrap proces pro konkrétní doménu (traffic_law)**  
-   - Existuje `tools/bootstrap_traffic_law_intents.py` a `docs/domain_map_traffic_law.md`, ale neznám jejich obsah.
-   - Není jasné, zda už proběhl bootstrap do `data/intents`, nebo se teprve plánuje.
+5. **Product / packs / templaty**
+   - Product‑specifické konfigurace (`product/e_advokat_pro/*.yaml`) – řízení rizik, licenci, feature flags.
+   - `packs/*` – předkonfigurované balíčky domén.
+   - `templates/answers/legal_answer_with_judikatura.md` – šablona finální odpovědi (vč. judikatury).
+   - `templates/documents/*` – šablony právních dokumentů.
 
 ---
 
-## 3. Návrh konkrétních kroků – zaměřeno na „bootstrap intent“ a architekturu
+## 2. Návrhy konkrétních kroků zaměřených na dopravní právo (traffic law test)
 
-### 3.1 Jasně oddělit _source → runtime → engine (pipeline pro intents)
+Beru „Traffic law test“ jako cíl: připravit dopravní právo tak, aby:
+- bylo konzistentně integrované do doménového katalogu a intent enginu,
+- šlo **automaticky testovat**, že traffic intent klasifikace funguje (unit/integration test, zátěžový „test dataset“),
+- bylo dobře zdokumentované (doménová mapa + guidelines pro přidávání dalších dopravních intentů).
 
-1. **Zavést (nebo formalizovat) build krok pro intents**
-   - Cíl: standardizovaný proces:
-     - vstup: `data/_source/domains/**`,
-     - výstup: `data/intents/*.json` přesně odpovídající `IntentDefinition`.
-   - Doporučení:
-     - Vytvořit v kořeni `Makefile` nebo `tools/BUILD.md` s příkazem např.:
-       - `python tools/generate_intents_from_yaml.py --out data/intents`.
-     - V README doplnit sekci „Jak bootstrapnout intents“:
-       - „Spusťte `python tools/bootstrap_traffic_law_intents.py`, pak `python tools/validate_intents.py`“.
+### 2.1 Architektura a data – sjednocení IntentDefinition vs loader
 
-2. **Zkonzolidovat generovací nástroje v `tools/`**
-   - Zrevidovat `generate_intent_from_domains.py`, `generate_intents_from_yaml.py`, `bootstrap_traffic_law_intents.py`, `fix_intent_pipeline_v1.py`, `fix_create_intent_runtime_dirs.py` a:
-     - Definovat jeden hlavní skript:
-       - `tools/build_intents.py` – orchestruje:
-         1. načtení domén z `_source`,
-         2. validaci proti `data/schema/domains.json` (pokud dává smysl),
-         3. generování do `data/intents`,
-         4. spuštění `tools/validate_intents.py`.
-     - Ostatní skripty označit jako legacy nebo je interně používat z nového orchestrátoru.
+1. **Sjednotit IntentDefinition a `_normalize_raw`**
+   - Problém: `IntentDefinition` obsahuje `intent_group` a `examples`, ale:
+     - `_normalize_raw` v `loader.py` přidává `intent_group` do `valid_fields` jen částečně (a současně ho nahoře odstraňuje, viz komentář „pokud nechceš…“ – to je v rozporu s dataclass).
+   - Konkrétní kroky:
+     1.1. V `loader._normalize_raw`:
+         - Rozhodnout, zda `intent_group` je **oficiální pole schématu** (podle `IntentDefinition` ANO).
+         - Pokud ano: odstranit pasáž:
+           ```python
+           if &quot;intent_group&quot; in raw:
+               raw.pop(&quot;intent_group&quot;)
+           ```
+         1.2. Přidat `examples` do `valid_fields`, pokud ještě není (aby bylo možné v intent JSONech mít příklady dotazů).
+     1.3. Zkontrolovat, zda `data/_source/domains/traffic_law/intents/*.json` mají `intent_group` a `examples` v konzistentním formátu; případně doplnit.
 
-3. **Doplnit/ujasnit runtime umístění intents**
-   - Ve `engines/intent/loader.py` je `BASE_DIR = os.path.join(&quot;data&quot;, &quot;intents&quot;)`.  
-   - Doporučení:
-     - V `docs/intent.system.md` jasně napsat:
-       - `data/_source/**` = zdroj,
-       - `data/intents/**` = build artefakt (nemusí se committovat, nebo ano, ale je „odvozený“).
-     - Pokud má být `data/intents` verziovaný, přidat krátké vysvětlení, jak ho regenerovat při změně `_source`.
-
----
-
-### 3.2 Úprava IntentDefinition a loaderu – zarovnání se _source
-
-4. **Sjednotit schéma IntentDefinition s template a _source**
-   - Aktuální `IntentDefinition` obsahuje:
-     - povinné: `intent_id, label_cs, domain, description_cs, subdomains, keywords, negative_keywords, risk_patterns, basic_questions, safety_questions, normative_references, conclusion_skeletons`;
-     - volitelné: `notes, version, intent_group, examples`.
-   - Loader `_normalize_raw`:
-     - maže `intent_group`, ale dataclass ho zase definuje – to je rozpor.
-   - Konkrétní změny:
-     1. Rozhodnout, zda `intent_group` a `examples` mají být součást IntentDefinition:
-        - podle enginu se `intent_group` používá k výstupu → ano, zachovat.
-     2. Upravte `_normalize_raw`:
-        - nemazat `intent_group`,
-        - do `valid_fields` přidat `&quot;examples&quot;`, pokud chcete příklady i v runtime.
-     3. Vytvořit/aktualizovat `data/_source/_template/intent_template.json` tak, aby:
-        - přesně odpovídal `IntentDefinition`,
-        - označil, co je „required“, co je „recommended“.
-
-5. **Dočasné fallbacky pro nekompletní intents (pro bootstrap fázi)**
-   - Aby bootstrap byl snadnější, můžete v `_normalize_raw` doplnit:
-     - `subdomains` default na `[]`,
-     - `risk_patterns` default na `[]`,
-     - `basic_questions`, `safety_questions`, `normative_references` default na `[]`,
-     - `conclusion_skeletons` default na `{}`.
-   - Tím bude možné generovat první vlnu intents jen s:
-     - `intent_id, label_cs, domain, description_cs, keywords`.
+2. **Zavést explicitní schéma pro `_source` traffic intent JSONy**
+   - V `data/_source/_template/intent_template.json` upřesnit:
+     - jak se mají pojmenovávat traffic intent ID (`traffic_speed_offense_*`),
+     - povinná pole pro dopravní právo – např. pro distinkci: přestupek vs. trestný čin v silniční dopravě (`subdomains`, tagy).
+   - Konkrétní kroky:
+     2.1. Vytvořit/aktualizovat `_template/intent_template.json` tak, aby obsahoval:
+         - `domain`: `&quot;traffic_law&quot;`,
+         - `subdomains`: napojené na `subdomains.yaml` (např. `&quot;traffic_speed&quot;`, `&quot;driving_license_points&quot;`, `&quot;accidents_liability&quot;`).
+         - `keywords` a `negative_keywords` s příklady pro dopravní kontext (např. `&quot;pokuta za rychlost&quot;`, negativní `&quot;jede vlak&quot;` atd.).
+     2.2. V `docs/domain_map_traffic_law.md` doplnit tabulku: `intent_id` ↔ `subdomain` ↔ typ situace ↔ příklady dotazů.
 
 ---
 
-### 3.3 Využití existence domény traffic_law (konkrétní bootstrap kroky)
+### 2.2 Traffic law intents – rozšíření a konzistence
 
-6. **Definovat „bootstrap scénář“ pro traffic_law jako vzor**
+3. **Zkontrolovat a doplnit traffic intents v `_source`**
+   - Aktuální seznam (z výpisu):
+     - `traffic_speed_offense_police_stop.json`
+     - `traffic_speed_offense_dispute_measurements.json`
+     - `traffic_speed_offense_abroad.json`
+     - `traffic_speed_admin_proceeding.json`
+     - `traffic_speed_block_fine.json`
+     - `traffic_speed_camera_notice.json`
+     - `traffic_speed_offense_generic.json`
+   - Vidím jen skupinu „rychlost“. Pro reálný „traffic law test“ je vhodné mít minimálně:
+     - alkohol / návykové látky,
+     - body a zákaz řízení,
+     - dopravní nehody a náhrada škody,
+     - parkování / odtah,
+     - technický stav vozidla / STK,
+     - provoz na dálnici, mýto, známky.
+   - Konkrétní kroky:
+     3.1. V `data/_source/domains/traffic_law/subdomains.yaml` ověřit, zda tyto oblasti jsou už definované (např. `alcohol_driving`, `driving_license_points`, `parking_towing`).
+     3.2. Pokud existují – doplnit odpovídající intent JSONy do `data/_source/domains/traffic_law/intents/`, např.:
+         - `traffic_dui_offense_admin_proceeding.json`
+         - `traffic_driving_license_points_query.json`
+         - `traffic_parking_ticket_dispute.json`
+         - `traffic_accident_damage_claim.json`
+     3.3. U každého intentu:
+         - vyplnit `keywords` pro typické dotazy (např. „jel jsem po nehodě od nehody“ vs. „parkovací lístek“, „bodový systém“),
+         - nastavit `negative_keywords`, aby se např. „nehoda“ v jiném než dopravním kontextu nechytala omylem.
+     3.4. Použít `tools/bootstrap_traffic_law_intents.py` pro generování základní kostry JSONů (pokud nástroj umí generovat z domény/subdomén; jinak navrhnout upgrade nástroje – viz 6. krok).
 
-   Navržený minimální postup:
-
-   1. Vzít existující `_source` soubory:
-      - `data/_source/domains/traffic_law/domain.yaml`,
-      - `data/_source/domains/traffic_law/subdomains.yaml`,
-      - `data/_source/domains/traffic_law/intents/*.json`.
-   2. Ověřit, jak se tyto intent JSONy liší od `IntentDefinition`:
-      - použít `tools/validate_intents.py` proti IntentDefinition (případně upravit validátor, aby načítal `_source` a hlásil rozdíly).
-   3. Upravit `tools/bootstrap_traffic_law_intents.py` tak, aby:
-      - načetl traffic_law `_source`,
-      - pro každý `_source` intent:
-        - doplnil chybějící pole podle template,
-        - vygeneroval `keywords` z textu label/description (na začátek – ručně se pak doplní),
-        - vytvořil `intent_id` ve formátu `traffic_speed_offense_*` apod., pokud ještě není,
-      - zapsal výsledek do `data/intents/traffic_law/*.json`.
-   4. Spustit demo s dotazy na dopravní přestupky a sledovat:
-      - výstup intent enginu (`intent`, `domain`, `keywords`, `confidence`),
-      - výstup `core_legal` (meta.domain/meta.intent – jestli to používá).
-
-7. **Přidat dokument „Bootstrap nové domény“**
-   - Např. `docs/bootstrap_intents.md`:
-     - kroky:
-       1. založ doménu v `data/_source/domains/&lt;domain_name&gt;`,
-       2. vyplň `domain.yaml` a `subdomains.yaml`,
-       3. vytvoř jeden nebo více `_source/intents/*.json` podle template,
-       4. spusť `python tools/build_intents.py --domain &lt;domain_name&gt;`,
-       5. spusť `pytest tests/test_generate_intents_from_yaml.py tests/test_runtime_pipeline.py`,
-       6. otestuj dotazy v `demo.py`.
-
----
-
-### 3.4 Zapojení promptu pro LLM intent classification
-
-8. **Použít šablonu `engines/intent/prompts/intent_classification.md`**
-
-   Aktuálně:
-   - V `engine.py` je system prompt natvrdo ve stringu.
-
-   Doporučené kroky:
-
-   1. Vytvořit malý loader pro prompt:
-      - buď v `engines/intent/engine.py` nebo samostatně `engines/intent/prompts/__init__.py`:
-
-        ```python
-        from pathlib import Path
-
-        PROMPT_PATH = Path(__file__).with_name(&quot;intent_classification.md&quot;)
-
-        def load_intent_prompt() -&gt; str:
-            return PROMPT_PATH.read_text(encoding=&quot;utf-8&quot;)
-        ```
-
-   2. V `_heuristic_classify` nic neměnit; upravit část s LLM:
-
-      ```python
-      from .prompts import load_intent_prompt  # if extracted
-
-      ...
-
-      system_prompt = load_intent_prompt()
-      ```
-
-   3. Do promptu přidat popis existujících intentů/domén:
-      - buď formou seznamu `intent_id → label_cs → domain` (dynamicky vkládaného do promptu),
-      - nebo alespoň popis „Jak má LLM strukturovaně odpovědět“ (JSON schema).
-
-   4. Definovat nový `use_case` v `llm/client.py`:
-      - například `use_case=&quot;intent_classification&quot;` a v `get_llm_params_for_use_case` přidat branch:
-        - model: helper_model,
-        - max_tokens: nízké (200–400),
-        - temperature: 0.1.
-
-9. **Zpřesnit využití LLM výstupu**
-   - Dnes `llm_raw` je jen string, nezpracovaný.
-   - Minimální bootstrap:
-     - nechat ho jako string v payload, ale:
-       - definovat v dokumentaci, jak ho má budoucí verze parsovat (např. JSON s `intent_id`, `domain`, `confidence`).
-   - Další krok (až bude stabilní pipeline):
-     - pokud heuristika má `confidence &lt; X` a LLM výstup je validní JSON se silnějším skóre, přepsat hlavní `intent`/`domain` podle LLM.
+4. **Generování do `data/intents/traffic_law`**
+   - Předpoklad: pipeline `_source/domains/traffic_law/intents` → `data/intents/traffic_law` je buď:
+     - už implementovaná v `tools/generate_intents_from_yaml.py` nebo `tools/generate_intent_from_domains.py`,
+     - nebo částečně (je potřeba ji sjednotit).
+   - Konkrétní kroky:
+     4.1. Zkontrolovat, zda `data/intents/traffic_law` obsahuje JSONy se stejnými ID jako `_source`. Pokud ne:
+         - spustit (ručně) vhodný generátor, nebo:
+         - doplnit `tools/bootstrap_traffic_law_intents.py`, aby:
+           - načetl `data/_source/domains/traffic_law/intents/*.json`,
+           - validoval vůči `IntentDefinition`,
+           - uložil normalizovanou verzi do `data/intents/traffic_law/*.json`.
+     4.2. Po vygenerování spustit `tools/validate_intents.py`, aby se ověřila schémata.
 
 ---
 
-### 3.5 Dokumentace a validace
+### 2.3 Testování – „Traffic law test suite“
 
-10. **Zpřesnit dokumentaci „intent systém“**
-    - Do `docs/intent.system.md` (nebo nového souboru):
-      - UML/ER diagram pro `IntentDefinition`,
-      - vysvětlit:
-        - rozdíl `_source intent` vs `runtime intent`,
-        - jak se využívají pole:
-          - `risk_patterns` – navázání na `engines/risk`,
-          - `safety_questions` – navázání na `engines/safety`,  
-          - `conclusion_skeletons` – navázání na `engines/core_legal` (conclusion).
+5. **Unit test pro intent engine se zaměřením na dopravní právo**
+   - Cíl: mít testy, které zkontrolují, že typické dopravní dotazy jsou přiřazeny ke správnému intentu v `traffic_law`.
+   - Konkrétní kroky:
+     5.1. Vytvořit `tests/test_intent_engine_traffic_law.py` s datově řízenými testy:
+         - připravit list strukturovaných test case:
+           ```python
+           CASES = [
+               {
+                 &quot;query&quot;: &quot;Jel jsem 70 v obci, policie mě zastavila a dala mi blokovou pokutu, můžu se odvolat?&quot;,
+                 &quot;expected_domain&quot;: &quot;traffic_law&quot;,
+                 &quot;expected_intent_prefix&quot;: &quot;traffic_speed_offense_block_fine&quot;,
+               },
+               {
+                 &quot;query&quot;: &quot;Přišla mi výzva k uhrazení částky za překročení rychlosti z radaru, co mám dělat?&quot;,
+                 &quot;expected_domain&quot;: &quot;traffic_law&quot;,
+                 &quot;expected_intent_prefix&quot;: &quot;traffic_speed_camera_notice&quot;,
+               },
+               ...
+           ]
+           ```
+         - v testu:
+           - vytvořit `EngineInput(context={&quot;case&quot;: {&quot;user_query&quot;: query}})`,
+           - zavolat `engines.intent.engine.run`,
+           - ověřit, že:
+             - `payload[&quot;domain&quot;] == expected_domain`,
+             - `payload[&quot;intent&quot;].startswith(expected_intent_prefix)` nebo přesná shoda,
+             - `payload[&quot;confidence&quot;] &gt;= 0.5` pro „jasné“ scénáře.
+     5.2. Přidat i **negativní testy**:
+         - dotazy typu „jízdenka na vlak“ nebo „letecká doprava“ by neměly spadnout do `traffic_law` domain (nebo by confidence měla být nízká, `domain` klidně `unknown`).
+     5.3. Zaintegrovat testy do existující test sady (`pytest` již běží, 4 passed – doplnit a ověřit, že testy nepadnou).
 
-11. **Rozšířit testy pro intent bootstrap**
-    - V `tests/test_generate_intents_from_yaml.py`:
-      - přidat test, který:
-        - vytvoří malý `_source` domain+intent fixture v dočasném adresáři,
-        - spustí generátor intents,
-        - ověří, že:
-          - výsledné JSONy lze načíst přes `load_intents()`,
-          - všechny potřebné fieldy odpovídají `IntentDefinition`.
-    - V `tests/test_runtime_pipeline.py`:
-      - doplnit parametrizované dotazy pro traffic_law (rychlost, pásy, alkohol) a ověřit, že:
-        - `intent_engine.payload[&quot;domain&quot;] == &quot;traffic_law&quot;` (nebo jiný doménový identifikátor),
-        - `confidence &gt; 0` a `matched_keywords` obsahují očekávané fráze.
+6. **Datový „test set“ pro traffic law**
+   - Pro robustnější testování (i manuální) by se hodil **externí dataset** dopravních dotazů.
+   - Konkrétní kroky:
+     6.1. Vytvořit např. `data/_source/domains/traffic_law/test_cases.yaml`:
+         - každá položka: `query`, `expected_intent`, `expected_domain`, `notes`.
+     6.2. Napsat malý nástroj (např. `tools/run_traffic_law_testset.py`):
+         - načte YAML,
+         - pro každý dotaz spustí intent engine,
+         - vypíše tabulku úspěšnosti + nejčastější chybná přiřazení.
+     6.3. Později lze tento nástroj zapojit do CI jako „smoke test“ pro traffic law.
 
 ---
 
-## 4. Shrnutí minimálních kroků pro „Bootstrap intent“
+### 2.4 Šablony a dokumentace – specificky pro traffic law
 
-1. Ujasnit a zdokumentovat: `_source` → `data/intents` → `IntentDefinition`.
-2. Opravit `IntentDefinition` + `_normalize_raw` tak, aby byly konzistentní s template a podporovaly `intent_group`, `examples`.
-3. Zprovoznit generátor intents pro jednu doménu (traffic_law) pomocí `tools/bootstrap_traffic_law_intents.py` nebo nového `build_intents.py`.
-4. Přidat build krok do dokumentace / Makefile („jak spustit bootstrap“).
-5. Zapojit šablonu `intent_classification.md` do LLM části intent enginu a definovat `use_case=&quot;intent_classification&quot;`.
-6. Rozšířit testy o kontrolu, že po bootstrapu se traffic_law intents reálně používají v pipeline.
+7. **Doménová mapa a guideline pro traffic law**
+   - `docs/domain_map_traffic_law.md` už existuje, ale potřebuje:
+     - být pevně navázána na skutečný obsah `data/_source/domains/traffic_law/*`.
+   - Konkrétní kroky:
+     7.1. V `docs/domain_map_traffic_law.md` u každé subdomény:
+         - vypsat existující intent ID,
+         - stručný popis (1–2 věty),
+         - 2–3 příklady typického dotazu.
+     7.2. Přidat sekci „Jak přidat nový traffic intent“:
+         - vzorový postup:
+           1. přidat `subdomain` do `subdomains.yaml`, pokud ještě není,
+           2. vytvořit nový intent JSON v `_source/domains/traffic_law/intents`,
+           3. vygenerovat do `data/intents/traffic_law`,
+           4. přidat test case do `test_cases.yaml` a do unit testu,
+           5. aktualizovat doménovou mapu.
 
-Pokud pošleš obsah:
-- `data/_source/_template/intent_template.json`,
-- jednoho `_source` intentu (např. `traffic_speed_offense_generic.json`),
-- `docs/intent.system.md`,
+8. **Vazba na šablony odpovědí**
+   - `templates/answers/legal_answer_with_judikatura.md` je generická; pro traffic law lze:
+     - využít stejné šablony, ale doplnit do IRAC skeletonu typické prvky (např. práce se záznamem v registru řidičů, možnosti opravného prostředku).
+   - Konkrétní kroky:
+     8.1. V `data/_source/domains/traffic_law/intents/*.json` využít pole `conclusion_skeletons`:
+         - pro každý traffic intent definovat kostru odpovědi (např. včetně bullet‑point shrnutí „co zkontrolovat“ – výsledek měření, správnost doručení, lhůty).
+     8.2. Ujistit se, že `core_legal/engine.py` tyto skeletony umí použít (typicky podle `intent_id`).
 
-mohu navrhnout přesný formát generovaného runtime intentu a konkrétní změny v `loader.py` a generovacích skriptech.
+---
+
+## 3. Co není jasné a co bych potřeboval vidět
+
+Abych navrhl ještě přesnější změny:
+
+1. **Obsah traffic domény**
+   - `data/_source/domains/traffic_law/domain.yaml`
+   - `data/_source/domains/traffic_law/subdomains.yaml`
+   - `data/_source/domains/traffic_law/readme.md`
+   - alespoň 1–2 ukázky z `traffic_speed_offense_*.json`
+   → potřeboval bych je vidět, abych mohl:
+   - navrhnout konkrétní strukturu subdomén (např. strom: „Přestupky řidiče“ → „Rychlost“, „Alkohol“ atd.),
+   - ověřit, jak přesně jsou definována pole `subdomains`, `risk_patterns`, `normative_references`.
+
+2. **Aktuální obsah `data/intents/traffic_law`**
+   - Není z výpisu jasné, zda je tato složka už naplněná konkrétními JSONy, a zda odpovídají `_source`.
+   → potřeboval bych výpis souborů + 1 ukázkový JSON z `data/intents/traffic_law`, abych:
+   - ověřil, jak vypadá „produkční“ intent,
+   - navrhl přesný mapping `_source` → `data/intents` (kde se dělají normalizace/transformace).
+
+3. **Nástroj `tools/bootstrap_traffic_law_intents.py`**
+   - Neznám jeho vnitřní logiku.
+   → potřeboval bych obsah souboru, abych:
+   - viděl, zda generuje z YAML, nebo z doménového popisu,
+   - navrhl rozšíření generátoru o nové subdomény / patterny.
+
+4. **Napojení traffic domény do `runtime/domain_catalog.py`**
+   - Jak jsou domény evidované a mapované na enginy?
+   → bez pohledu na `runtime/domain_catalog.py` a možná `docs/domain_catalog.md` nelze přesně navrhnout změny pro traffic law (např. aliasy typu „dopravní přestupek“, „silniční doprava“).
+
+---
+
+Pokud pošleš tyto konkrétní soubory (nebo relevantní výřezy), můžu:
+- přesně navrhnout strukturu subdomén pro dopravní právo,
+- připravit vzorové traffic intents (i textově),
+- navrhnout konkrétní test cases (včetně negativních),
+- a případné úpravy nástrojů v `tools/*.py`.
 ================================================================================
 [fix_create_intent_runtime_dirs] Ensured runtime dirs in: /home/runner/work/pravni-strazce/pravni-strazce/data/intents
   - school_law
@@ -316,6 +297,14 @@ mohu navrhnout přesný formát generovaného runtime intentu a konkrétní změ
   - civil_law
   - consumer_finance_law
   - international_law
+[bootstrap_traffic_law] updated: data/intents/traffic_law/traffic_speed_admin_proceeding.json
+[bootstrap_traffic_law] updated: data/intents/traffic_law/traffic_speed_block_fine.json
+[bootstrap_traffic_law] updated: data/intents/traffic_law/traffic_speed_camera_notice.json
+[bootstrap_traffic_law] updated: data/intents/traffic_law/traffic_speed_offense_abroad.json
+[bootstrap_traffic_law] updated: data/intents/traffic_law/traffic_speed_offense_dispute_measurements.json
+[bootstrap_traffic_law] updated: data/intents/traffic_law/traffic_speed_offense_generic.json
+[bootstrap_traffic_law] updated: data/intents/traffic_law/traffic_speed_offense_police_stop.json
+[bootstrap_traffic_law] DONE – updated=7, unchanged=0, source_dir=/home/runner/work/pravni-strazce/pravni-strazce/data/_source/domains/traffic_law/intents
 </pre>
 </body>
 </html>

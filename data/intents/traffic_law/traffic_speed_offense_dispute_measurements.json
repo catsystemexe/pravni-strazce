@@ -1,0 +1,70 @@
+{
+  "basic_questions": [
+    "Je k dispozici fotodokumentace?",
+    "Jaký typ radaru byl použit?",
+    "Je doložená kalibrace?",
+    "Bylo měření provedeno v souladu s manuálem?",
+    "Byla viditelnost nebo prostředí relevantní pro chybu měření?"
+  ],
+  "conclusion_skeletons": {
+    "high": "Vysoká šance sporu – doporučuji odpor a návrh dokazování.",
+    "low": "Je nutné získat podklady k měření.",
+    "medium": "Existují náznaky technických vad. Doporučuji vyžádat kalibraci a protokol."
+  },
+  "description_cs": "Případy, kdy řidič zpochybňuje správnost měření – nevhodná poloha radaru, chybějící kalibrace, nesoulad údajů.",
+  "domain": "traffic_law",
+  "examples": [
+    "Radar byl špatně postavený, můžu to napadnout?",
+    "Na fotce není moje SPZ, ale přišlo mi oznámení.",
+    "Je možné napadnout měření radarem kvůli chybějící kalibraci?"
+  ],
+  "intent_id": "traffic_speed_offense_dispute_measurement",
+  "keywords": [
+    "chyba měření",
+    "chyba radaru",
+    "laser",
+    "kalibrace",
+    "neplatné měření",
+    "sporná fotka",
+    "radar byl špatně umístěn",
+    "odpor"
+  ],
+  "label_cs": "Překročení rychlosti – spor o měření",
+  "negative_keywords": [
+    "nehoda",
+    "alkohol"
+  ],
+  "normative_references": [
+    "zakon_o_silnicnim_provozu",
+    "spravni_rad",
+    "metro_legislativa"
+  ],
+  "risk_patterns": [
+    {
+      "dimensions": [
+        "procedural"
+      ],
+      "pattern": "kalibrac"
+    },
+    {
+      "dimensions": [
+        "procedural"
+      ],
+      "pattern": "neplatn.*mereni"
+    },
+    {
+      "dimensions": [
+        "evidential"
+      ],
+      "pattern": "sporn.*(foto|fotka)"
+    }
+  ],
+  "safety_questions": [
+    "Běží lhůta pro odpor?",
+    "Hrozí zákaz řízení?"
+  ],
+  "subdomains": [
+    "speeding"
+  ],
+  "version": "1.0.0"
+}

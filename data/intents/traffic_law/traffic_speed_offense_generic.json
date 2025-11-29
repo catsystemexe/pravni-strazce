@@ -1,0 +1,74 @@
+{
+  "basic_questions": [
+    "Kde jsi jel (v obci, mimo obec, na dálnici)?",
+    "O kolik kilometrů za hodinu jsi rychlost překročil?",
+    "Proběhlo nějaké měření, nebo šlo jen o 'odhad' policisty?",
+    "Řešili to policisté na místě, nebo máš jen informaci ústně?",
+    "Byl sepsán nějaký protokol nebo blok na místě?"
+  ],
+  "conclusion_skeletons": {
+    "high": "Ze situace vyplývá, že může jít o závažnější překročení rychlosti, které může vést k zákazu řízení nebo vysokému bodovému zatížení. Doporučuji nejednat unáhleně, neplatit nic bez ověření a připravit se na možné správní řízení.",
+    "low": "Z popisu situace zatím není zřejmé, jak přesně bylo překročení rychlosti zjištěno ani jaký je procesní stav. Je potřeba zjistit, zda byl sepsán blok nebo protokol a jaké konkrétní ustanovení zákona se má použít.",
+    "medium": "Jde pravděpodobně o standardní přestupek překročení rychlosti. Doporučuji zjistit přesné údaje o množství překročení a místě (obec/mimo obec) a ověřit, zda policie postupovala v souladu se zákonem a interními předpisy."
+  },
+  "description_cs": "Obecné překročení rychlosti v obci i mimo obec, ať už naměřené radarem, laserem nebo jiným prostředkem. Zahrnuje základní dotazy typu 'překročil jsem rychlost, co mi hrozí' bez konkrétního procesního stavu.",
+  "domain": "traffic_law",
+  "examples": [
+    "Překročil jsem v obci rychlost o 20 km/h, co mi hrozí?",
+    "Jel jsem 150 na dálnici, jaká je za to pokuta a body?",
+    "Policie mi řekla, že jsem jel moc rychle, ale přesně nevím o kolik."
+  ],
+  "intent_id": "traffic_speed_offense_generic",
+  "keywords": [
+    "překročení rychlosti",
+    "prekroceni rychlosti",
+    "jel jsem moc rychle",
+    "rychlost v obci",
+    "rychlost mimo obec",
+    "kolik mi hrozí bodů",
+    "jaká je pokuta za rychlost"
+  ],
+  "label_cs": "Překročení rychlosti – obecně",
+  "negative_keywords": [
+    "dědictví",
+    "dedictvi",
+    "rozvod",
+    "pracovní smlouva",
+    "pracovni smlouva"
+  ],
+  "normative_references": [
+    "zakon_o_silnicnim_provozu",
+    "zakon_o_odpovednosti_za_prestupky",
+    "spravni_rad"
+  ],
+  "notes": "Obecný vstupní intent pro překročení rychlosti bez konkrétního dokumentu (výzva, oznámení, blok).",
+  "risk_patterns": [
+    {
+      "dimensions": [
+        "severity"
+      ],
+      "pattern": "o\\s*20\\s*km/h|o\\s*30\\s*km/h|o\\s*40\\s*km/h"
+    },
+    {
+      "dimensions": [
+        "severity"
+      ],
+      "pattern": "v\\s*obci"
+    },
+    {
+      "dimensions": [
+        "severity"
+      ],
+      "pattern": "mimo\\s*obec|dalnic"
+    }
+  ],
+  "safety_questions": [
+    "Byl ti předložen dokument k podpisu (blok, protokol)?",
+    "Podepsal jsi něco, čemu jsi nerozuměl?",
+    "Hrozí ti podle informací policie body nebo zákaz řízení?"
+  ],
+  "subdomains": [
+    "speeding"
+  ],
+  "version": "1.0.0"
+}

@@ -1,0 +1,61 @@
+{
+  "basic_questions": [
+    "Z jaké země pokuta přišla?",
+    "Je přiložen důkaz (foto, měření)?",
+    "Je dopis přeložen?",
+    "Jaké jsou lhůty v dané zemi?",
+    "Vyžaduje úřad identifikaci řidiče?"
+  ],
+  "conclusion_skeletons": {
+    "high": "Riziko přeshraničního vymáhání – doporučuji reagovat včas.",
+    "low": "Nutné doplnit údaje z dopisu.",
+    "medium": "Standardní zahraniční pokuta – doporučuji překlad a kontrolu lhůt."
+  },
+  "description_cs": "Pokuty ze zahraničí (Rakousko, Německo, Polsko). Problémy s doručováním, jazykem, vymáháním a přeshraniční spoluprací.",
+  "domain": "traffic_law",
+  "examples": [
+    "Přišla mi pokuta z Rakouska za rychlost, co s tím?",
+    "Německo mi poslalo dopis ohledně rychlosti.",
+    "Může zahraniční pokuta přijít až po několika měsících?"
+  ],
+  "intent_id": "traffic_speed_offense_abroad",
+  "keywords": [
+    "pokuta z Rakouska",
+    "pokuta z Německa",
+    "pokuta v zahraničí",
+    "rychlost v zahraničí",
+    "cílová spolupráce",
+    "vymáhání pokuty"
+  ],
+  "label_cs": "Rychlost v zahraničí",
+  "negative_keywords": [
+    "nehoda",
+    "alkohol"
+  ],
+  "normative_references": [
+    "EU_crossborder_enforcement",
+    "national_traffic_codes"
+  ],
+  "risk_patterns": [
+    {
+      "dimensions": [
+        "jurisdiction"
+      ],
+      "pattern": "rakousk|nemeck"
+    },
+    {
+      "dimensions": [
+        "jurisdiction"
+      ],
+      "pattern": "zahranic"
+    }
+  ],
+  "safety_questions": [
+    "Hrozí zvýšení pokuty při prodlení?",
+    "Hrozí předání do vymáhání v ČR?"
+  ],
+  "subdomains": [
+    "speeding"
+  ],
+  "version": "1.0.0"
+}

@@ -1,0 +1,88 @@
+{
+  "basic_questions": [
+    "Kdy přesně ti výzva nebo oznámení dorazilo (datum převzetí/doručení)?",
+    "Je adresátem řidič nebo provozovatel vozidla?",
+    "Je ve výzvě uveden konkrétní požadavek (uvedení řidiče, podání vysvětlení, zaplacení částky)?",
+    "Je ve výzvě uvedena lhůta a jak je formulována?",
+    "Je z fotodokumentace zřejmé, kdo vozidlo řídil?",
+    "Jsi si jistý, kdo tehdy vozidlo řídil?"
+  ],
+  "conclusion_skeletons": {
+    "high": "Podle popisu může být situace procesně citlivá – krátké lhůty, tlak na uvedení řidiče a riziko vyšších sankcí. Doporučuji nejednat pod časovým tlakem bez konzultace, nepodepisovat nic bez přečtení a zvážit důsledky uvedení konkrétní osoby jako řidiče.",
+    "low": "Zatím nemáme dost údajů o obsahu výzvy ani o běhu lhůt. Je potřeba přesně zjistit datum převzetí, požadavky výzvy a to, zda jsi byl vyzván jako řidič nebo provozovatel.",
+    "medium": "Jde o standardní výzvu k podání vysvětlení nebo oznámení provozovateli. Doporučuji pečlivě zkontrolovat lhůty, zvážit, zda je možné zpochybnit měření nebo identitu řidiče, a připravit věcné písemné vyjádření."
+  },
+  "description_cs": "Situace, kdy řidiči nebo provozovateli vozidla dorazí výzva, oznámení nebo fotodokumentace z automatizovaného měření rychlosti (radar, úsekové měření, pevná kamera). Zaměřuje se na to, jak reagovat a zda má smysl se bránit.",
+  "domain": "traffic_law",
+  "examples": [
+    "Přišla mi poštou výzva k podání vysvětlení kvůli překročení rychlosti z radaru, co mám dělat?",
+    "Dostal jsem fotku z úsekového měření a chtějí po mně, abych uvedl řidiče.",
+    "Přišlo mi oznámení o přestupku s fotkou auta, ale nejsem si jistý, kdo řídil."
+  ],
+  "intent_id": "traffic_speed_camera_notice",
+  "keywords": [
+    "výzva k podání vysvětlení",
+    "vyzva k podani vysvetleni",
+    "oznámení o přestupku",
+    "oznameni o prestupku",
+    "fotka z radaru",
+    "fotografie z radaru",
+    "automatizované měření",
+    "úsekové měření",
+    "usekove mereni",
+    "pevná kamera",
+    "pres prekroceni rychlosti z radaru"
+  ],
+  "label_cs": "Výzva z radaru / kamery – překročení rychlosti",
+  "negative_keywords": [
+    "dopravní nehoda",
+    "dopravni nehoda",
+    "alkohol",
+    "drogy",
+    "dědictví",
+    "rozvod"
+  ],
+  "normative_references": [
+    "zakon_o_silnicnim_provozu",
+    "zakon_o_odpovednosti_za_prestupky",
+    "spravni_rad"
+  ],
+  "notes": "Zásadní je správná práce s lhůtou a rozdíl mezi odpovědností řidiče a provozovatele vozidla.",
+  "risk_patterns": [
+    {
+      "dimensions": [
+        "procedural",
+        "deadline"
+      ],
+      "pattern": "vyzva.*k podani.*vysvetleni"
+    },
+    {
+      "dimensions": [
+        "procedural",
+        "deadline"
+      ],
+      "pattern": "oznameni.*o prestupku"
+    },
+    {
+      "dimensions": [
+        "liability"
+      ],
+      "pattern": "provozovatel vozidla"
+    },
+    {
+      "dimensions": [
+        "deadline"
+      ],
+      "pattern": "l[h|u]ta.*[0-9]+\\s*dnu"
+    }
+  ],
+  "safety_questions": [
+    "Neběží už velmi krátká lhůta k reakci (např. méně než 5 dnů)?",
+    "Hrozí v důsledku odmítnutí uvedení řidiče vyšší sankce nebo zvláštní režim?",
+    "Jsi v situaci, kdy by přiznání řidiče mohlo vést k zákazu řízení?"
+  ],
+  "subdomains": [
+    "speeding"
+  ],
+  "version": "1.0.0"
+}
