@@ -5,7 +5,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 from datetime import datetime, timezone
+import sys
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = REPO_ROOT / "data" / "_source" / "domains" / "traffic_law" / "intents"
